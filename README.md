@@ -20,8 +20,9 @@ Check out broomfieldlights.com for way more about my Christmas light show and re
 		- "Start" on guitar, bottom left button on steering wheel
 		- Only enter the mode if all active controllers are pressing their magic button simultaneously
 	- Perhaps have a different "Golden button" on a pedestal that someone can hit to enter the mode
-- Create an interlude sequence to play when all controllers have gone inactive in order to draw attention
 - Waterproof the controllers
 - Build a stand for the Logitech controller
 - Test out routerless operation with crossover cable directly connection rpi and E682
 
+## TO-DONE list
+- Create an interlude sequence to play when all controllers have gone inactive in order to draw attention

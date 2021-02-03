@@ -4,6 +4,7 @@ from datetime import datetime
 
 from xbox360controller import Xbox360Controller
 
+from Interlude import Interlude
 from Guitar import Guitar
 from Car import Car
 from LightSender import LightSender
@@ -14,6 +15,8 @@ NUM_PIXELS = 60
 
 try:
 	light_sender = LightSender(NUM_PIXELS)
+	light_sender.add_controller('interlude', Interlude('interlude', NUM_PIXELS, light_sender))
+	light_sender.allocate_pixels()
 	
 	with Xbox360Controller(0, axis_threshold=0.2) as controller:
 		controller.info()

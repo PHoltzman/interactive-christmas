@@ -62,6 +62,7 @@ class LightSender:
 	def go_active(self, name):
 		print(f'{name} is active')
 		self.controllers[name]["is_active"] = True
+		self.controllers['interlude']['is_active'] = False 
 		
 		# update the controllers pixel allocations
 		self.allocate_pixels()
@@ -70,7 +71,8 @@ class LightSender:
 		num_active = len([k for k, v in self.controllers.items() if v["is_active"]])
 		
 		if num_active == 0:
-			pixel_ranges = None
+			pixel_ranges = [[0, 59]]
+			self.controllers['interlude']['is_active'] = True
 		elif num_active == 1:
 			pixel_ranges = [[0, 59]]
 		elif num_active == 2:

@@ -1,5 +1,5 @@
 class Lights:
-	COLOR_LIST = ["green", "red", "yellow", "blue", "orange", "white", "black"]
+	COLOR_LIST = ["green", "red", "yellow", "blue", "orange", "white", "black", "purple", "pink", "teal"]
 	
 	@staticmethod
 	def rgb_from_color(color_name):
@@ -15,6 +15,12 @@ class Lights:
 			return 255, 100, 0
 		elif color_name in ['neck', 'white']:
 			return 255, 255, 255
+		elif color_name == 'pink':
+			return 255, 0, 255
+		elif color_name == 'teal':
+			return 0, 255, 255
+		elif color_name == 'purple':
+			return 100, 0, 255
 		else:
 			return 0, 0, 0
 			
@@ -70,6 +76,44 @@ class Lights:
 				section_index += 1
 				
 		return packet
+		
+	@staticmethod
+	def make_rainbow_packet(num_pixels):
+		colors = ["red", "orange", "yellow", "green", "blue", "purple"]
+		colors_rgb = [Lights.rgb_from_color(x) for x in colors]
+		packet = Lights.get_blocks_packet(colors_rgb, num_pixels)
+		return packet
+		
+	@staticmethod
+	def make_interlude_packet_plan(num_pixels):
+		# rainbow blocks scrolling one direction at 50% dimming
+		# a full brightness hot spot scrolling the other direction at a different speed
+		# 3x around for dimming while only 1x around for rainbow
+		packet = Lights.make_rainbow_packet(num_pixels)
+		packet_plan = []
+		
+		# make the packet_plan at full brightness
+		for i in range(num_pixels):
+			shifted = Lights.shift_packet(packet, i, 'left')
+			packet_plan.append(shifted)
+			packet_plan.append(shifted)
+			packet_plan.append(shifted)
+		
+		# make the base dimming plan
+		dim_packet = [0.1] * len(packet)
+		dim_packet[-15:] = [0.7, 0.7, 0.7, 0.85, 0.85, 0.85, 1.0, 1.0, 1.0, 0.85, 0.85, 0.85, 0.7, 0.7, 0.7]
+		
+		dim_plan = []
+		for i in range(num_pixels * 3):
+			dim_packet = Lights.shift_packet(dim_packet, 1, 'right')
+			dim_plan.append(dim_packet)
+		
+		final_plan = []
+		for i, packet in enumerate(packet_plan):
+			dim_packet = dim_plan[i]
+			final_plan.append([int(a*b) for a,b in zip(packet,dim_packet)])
+					
+		return final_plan
 		
 	@staticmethod
 	def make_whole_string_packet(r, g, b, num_pixels):

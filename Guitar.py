@@ -44,7 +44,7 @@ class Guitar:
 			
 	def check_for_inactivity(self):
 		if self.is_active:
-			if (datetime.now() - self.last_input_datetime).total_seconds() > 30:
+			if (datetime.now() - self.last_input_datetime).total_seconds() > 10:
 				# this controller is now inactive so do stuff accordingly
 				self.is_active = False
 								
