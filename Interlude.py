@@ -5,24 +5,24 @@ from datetime import datetime, timedelta
 from Lights import Lights
 
 class Interlude:
-	def __init__(self, name, num_pixels, light_sender):
+	def __init__(self, name, light_dimensions, light_sender):
 		self.name = name
-		self.num_pixels = num_pixels
+		self.light_dimensions = light_dimensions
 		self.light_sender = light_sender
 		
 		self.is_active = False
 		self.last_motion_step_time = datetime.now()
 		
-		self.current_packet_plan = Lights.make_interlude_packet_plan(self.num_pixels)
+		self.current_packet_plan = []
 		self.current_packet_plan_index = 0
 		self.time_delay = 0.05
 			
-	def update_pixel_allocation(self, num_pixels):
-		self.num_pixels = num_pixels
+	def update_pixel_allocation(self, light_dimensions):
+		self.light_dimensions = light_dimensions
 		self.run_lights()
 	
 	def run_lights(self):
-		self.current_packet_plan = Lights.make_interlude_packet_plan(self.num_pixels)
+		self.current_packet_plan = Lights.make_interlude_packet_plan(self.light_dimensions)
 		self.current_packet_plan_index = 0
 		self.last_motion_step_time = datetime.now()
 				

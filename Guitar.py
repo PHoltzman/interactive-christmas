@@ -5,10 +5,10 @@ from datetime import datetime, timedelta
 from Lights import Lights
 
 class Guitar:
-	def __init__(self, controller, name, num_pixels, light_sender):
+	def __init__(self, controller, name, light_dimensions, light_sender):
 		self.controller = controller
 		self.name = name
-		self.num_pixels = num_pixels
+		self.light_dimensions = light_dimensions
 		self.light_sender = light_sender
 		
 		self.last_input_datetime = datetime.now() - timedelta(hours=1)  # initialize to a long time ago so controller starts as inactive
@@ -24,7 +24,7 @@ class Guitar:
 		self.dim_ratio = None
 		
 		self.current_colors = []
-		self.current_packet_plan = [Lights.make_whole_string_packet(0, 0, 0, self.num_pixels)]
+		self.current_packet_plan = [Lights.make_whole_string_packet(0, 0, 0, self.light_dimensions)]
 		self.current_packet_plan_index = 0
 		
 		for button in controller.buttons:
@@ -38,8 +38,8 @@ class Guitar:
 				self.time_delay = self.get_time_delay_from_selector_position(self.selector_position)
 			axis.when_moved = self.on_axis_moved
 			
-	def update_pixel_allocation(self, num_pixels):
-		self.num_pixels = num_pixels
+	def update_pixel_allocation(self, light_dimensions):
+		self.light_dimensions = light_dimensions
 		self.run_lights(self.current_colors, self.select_mode)
 			
 	def check_for_inactivity(self):
@@ -103,13 +103,13 @@ class Guitar:
 	def run_lights(self, color_list, mode=0):
 		num_colors = len(color_list)
 		if num_colors == 0:
-			packet_plan = [Lights.make_whole_string_packet(0, 0, 0, self.num_pixels)]
+			packet_plan = [Lights.make_whole_string_packet(0, 0, 0, self.light_dimensions)]
 			
 		else:
 			colors_rgb = [Lights.rgb_from_color(x) for x in color_list]
 			if mode == 0:
 				# lights alternate statically with each color that was pressed pixel by pixel
-				packet_plan = [Lights.get_alternating_packet(colors_rgb, self.num_pixels)]
+				packet_plan = [Lights.get_alternating_packet(colors_rgb, self.light_dimensions)]
 				
 			elif mode == 1:
 				# lights form 1 block of each color that was pressed
@@ -119,15 +119,15 @@ class Guitar:
 				packet_plan = []
 				if mode == 2:
 					# the lights in the string scroll perpetually in the same pattern as mode 0
-					packet = Lights.get_alternating_packet(colors_rgb, self.num_pixels)
+					packet = Lights.get_alternating_packet(colors_rgb, self.self.light_dimensions)
 					for i in range(len(colors_rgb)):
-						packet_plan.append(Lights.shift_packet(packet, i, 'right'))
+						packet_plan.append(Lights.shift_packet(packet, i, right=True))
 					
 				elif mode == 3:
 					# the lights in the string scroll perpetually in the same pattern as mode 1
 					packet = Lights.get_blocks_packet(colors_rgb, self.num_pixels)
 					for i in range(self.num_pixels):
-						packet_plan.append(Lights.shift_packet(packet, i, 'right'))
+						packet_plan.append(Lights.shift_packet(packet, i, right=True))
 					
 				elif mode == 4:
 					# the lights wipe on and off, alternating like in mode 0

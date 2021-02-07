@@ -6,15 +6,18 @@ I am currently running on a raspberry pi 2 and using a SanDevices E682 to conver
 Check out broomfieldlights.com for way more about my Christmas light show and related things. The intent is to setup a secondary display in my side yard where people who come to see our light show can have a more hands-on experience and actually interact with some Christmas lights as well.
 
 ## TODO list
-- Get more controllers and interface with them (guitar hero drum kit? DJ Hero scratch pad?)
 - Add ability for controller to auto reconnect if it gets disconnected (guitar cord is a bit flaky when pulled)
+- Fix any lingering issues with the reallocation of lights not going smoothly
+- Move from 1 dimensional lights to 2D or 3D (my brain hurts trying to figure out how to make this interesting creatively and fabricate all the patterns...1D has been hard enough)
+- Have lights mapped across multiple universes and work out how to send properly
+- Get more controllers and interface with them (guitar hero drum kit? DJ Hero scratch pad?)
+- Figure out how to do one time effects (pulse and fade out when a drum is hit but not repeating)
+- Develop one or more games to be played with controllers (follow the leader? snake? Catch the pixel?)
 - Add sound when the guitar is played
 	- Have a mode for chords? Another mode for solo effects?
 		- Perhaps use the headstock buttons for chords and the neck buttons for soloing?
 	- Allow chords to be in different keys or just have 1 set of options? (I, IV, V, VIm, IIm)
-- Move from 1 dimensional lights to 2D or 3D (my brain hurts trying to figure out how to make this interesting creatively and fabricate all the patterns...1D has been hard enough)
-- Fix any lingering issues with the reallocation of lights not going smoothly
-- Do something with the brake pedal and 2 other steering wheel buttons on the Logitech controller
+- Do something with the brake pedal and 2 other steering wheel buttons on the Logitech controller (make a game using gas/brake/wheel to go catch a pixel)
 - Figure out a merge effect where all controllers work together to affect all of the lights rather than subdividing the pixels
 	- To start, have a button on each controller than can be used to enter this mode
 		- "Start" on guitar, bottom left button on steering wheel
