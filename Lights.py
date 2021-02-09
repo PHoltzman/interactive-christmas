@@ -54,7 +54,34 @@ class Lights:
 		# for up down shifting, need to rearrange each grid to do the shift
 		if up or down and H > 1:
 			pixels_to_shift_H = pixels_to_shift % H if pixels_to_shift >= H else pixels_to_shift
-			num = -1 * pixels_to_shift_H if up else pixels_to_shift_H
+			num = -1 * pixels_to_shift_H if down else pixels_to_shift_H
+			
+			'''
+			init = [
+				[A, B, C, D, E, F],
+				[G, H, I, J, K, L],
+				[M, N, O, P, Q, R],
+				[S, T, U, V, W, X]			
+			]
+			
+			trans = [
+				[A, G, M, S],
+				[B, H, N, T],
+				[C, I, O, U],
+				[D, J, P, V],
+				[E, K, Q, W],
+				[F, L, R, X]
+			]
+			
+			shifted = [
+				[G, M, S, A],
+				[H, N, T, B],
+				[I, O, U, C],
+				[J, P, V, D],
+				[K, Q, W, E],
+				[L, R, X, F]
+			]
+			'''
 			
 			new_packet = []
 			for grid in packet:
@@ -62,10 +89,10 @@ class Lights:
 				new_grid = []
 				for x in range(L):
 					t_col = [row[x] for row in grid]
-					shifted = t_col[num:] + t_col[:num])
+					shifted = t_col[num:] + t_col[:num]
 					t_grid.append(shifted)
 				
-				for x in range(L):
+				for x in range(H):
 					row = [t_col[x] for t_col in t_grid]
 					new_grid.append(row)
 				new_packet.append(new_grid)
@@ -83,7 +110,7 @@ class Lights:
 				t_slice = []	# list of line lists
 				for h in range(H):
 					t_line = [packet[d][h][x] for d in range(D)]
-					shifted = t_line[num:] + t_line[:num])
+					shifted = t_line[num:] + t_line[:num]
 					t_slice.append(shifted)
 				t_packet.append(t_slice)
 		
@@ -100,8 +127,16 @@ class Lights:
 		
 	@staticmethod
 	def sub_packet(packet, num_pixels):
+		# TODO: make this handle more than just scrolling in L direction
 		num = num_pixels
-		return packet[:num]
+		new_packet = []
+		for grid in packet:
+			new_grid = []
+			for row in grid:
+				new_grid.append(row[:num] + [(0, 0, 0) for x in range(num, len(row) + 1)])
+			new_packet.append(new_grid)
+			
+		return new_packet
 
 	@staticmethod
 	def get_alternating_packet(colors_rgb, light_dimensions, segment_size=1):
@@ -139,19 +174,13 @@ class Lights:
 		return packet
 		
 	@staticmethod
-	def get_blocks_packet(colors_rgb, light_dimensions):
-		# the whole light string alternates statically with each color that was pressed, section by section
-		# need to determine how many sections are needed across the string and determine the boundary points
-		# need to determine this for all three axes independently based on their dimensions
-		L, H, D = light_dimensions
+	def get_blocks_row(colors_rgb, L):
 		num_colors = len(colors_rgb)
-		
-		# calculate first row
-		section_size = round(num_pixels / num_colors)
+		section_size = round(L / num_colors)
 		row = []
 		color_index = 0
 		section_index = 0
-		for i in range(num_pixels):
+		for i in range(L):
 			row.append(colors_rgb[color_index])
 			if section_index == section_size - 1:
 				section_index = 0
@@ -159,16 +188,60 @@ class Lights:
 			else:
 				section_index += 1
 				
-		# calculate first grid
+		return row
 		
-				
+	@staticmethod
+	def get_blocks_grid(colors_rgb, L, H):
+		num_colors = len(colors_rgb)
+		section_size = round(H / num_colors)
+		
+		new_colors_rgb = list(colors_rgb)
+		
+		section_index = 0
+		grid = []
+		for i in range(H):
+			grid.append(Lights.get_blocks_row(new_colors_rgb, L))
+			if section_index == section_size - 1:
+				section_index = 0
+				new_colors_rgb = new_colors_rgb[1:] + new_colors_rgb[:1]
+			else:
+				section_index += 1
+		
+		return grid
+		
+		
+	@staticmethod
+	def get_blocks_packet(colors_rgb, light_dimensions):
+		# the whole light string alternates statically with each color that was pressed, section by section
+		# need to determine how many sections are needed across the string and determine the boundary points
+		# need to determine this for all three axes independently based on their dimensions
+		L, H, D = light_dimensions
+		num_colors = len(colors_rgb)
+		section_size = round(D / num_colors)
+
+		# take the first row and replicate it section_size number of times
+		# then calculate a shifted version of the row by changing the color ordering
+		# (can't just truly shift the row because we don't know for sure that there aren't trailing dark pixels at the ends
+		# due to the math not working out evenly
+		new_colors_rgb = list(colors_rgb)
+		
+		section_index = 0
+		packet = []
+		for i in range(D):
+			packet.append(Lights.get_blocks_grid(new_colors_rgb, L, H))
+			if section_index == section_size - 1:
+				section_index = 0
+				new_colors_rgb = new_colors_rgb[1:] + new_colors_rgb[:1]
+			else:
+				section_index += 1
+		
 		return packet
 		
 	@staticmethod
 	def make_rainbow_row(num_pixels, color_shift=0):
 		colors = ["red", "orange", "yellow", "green", "blue", "purple"]
 		colors_rgb = [Lights.rgb_from_color(x) for x in colors]
-		packet = Lights.get_blocks_packet(colors_rgb, num_pixels)
+		packet = Lights.get_blocks_row(colors_rgb, num_pixels)
 		return packet
 		
 	@staticmethod
@@ -185,17 +258,13 @@ class Lights:
 			grid.append(Lights.make_rainbow_row(L, color_shift=randint(0, 6)))
 		packet = [grid]
 		
-		print(len(packet))
-		print(len(packet[0]))
-		print(len(packet[0][0]))
-		print()
 		# make the full packet_plan at full brightness
 		packet_plan = []
 		for i in range(L):
 			for grid in packet:
 				new_grid = []
 				for row in grid:
-					new_row = Lights.shift_packet(row, i, left=True)
+					new_row = Lights.shift_packet([[row]], i, left=True)[0][0]
 					new_grid.append(new_row)
 			new_packet = [new_grid]
 			packet_plan.append(new_packet)
@@ -218,20 +287,10 @@ class Lights:
 			for dim_grid in dim_packet:
 				new_dim_grid = []
 				for dim_row in dim_grid:
-					new_dim_row = Lights.shift_packet(dim_row, i, right=True)
+					new_dim_row = Lights.shift_packet([[dim_row]], i, right=True)[0][0]
 					new_dim_grid.append(new_dim_row)
 			new_dim_packet = [new_dim_grid]
 			dim_plan.append(new_dim_packet)
-		
-		print(len(packet_plan))
-		print(len(packet_plan[0]))
-		print(len(packet_plan[0][0]))
-		print(len(packet_plan[0][0][0]))
-		print()
-		print(len(dim_plan))
-		print(len(dim_plan[0]))
-		print(len(dim_plan[0][0]))
-		print(len(dim_plan[0][0][0]))
 		
 		# multiply the packet_plan by the dim_plan to get the final result
 		final_plan = []

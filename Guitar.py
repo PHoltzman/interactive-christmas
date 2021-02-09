@@ -20,10 +20,14 @@ class Guitar:
 		self.current_mode = 0
 		self.select_mode = 0
 		self.selector_position = None
-		self.last_motion_step_time = None
+		self.last_motion_step_time = self.last_input_datetime
 		self.dim_ratio = None
 		
+		self.motion_direction_list = ['right', 'down_right', 'down', 'down_left', 'left', 'up_left', 'up', 'up_right']
+		self.motion_direction_index = 0
+		
 		self.current_colors = []
+		self.current_motion_colors = []
 		self.current_packet_plan = [Lights.make_whole_string_packet(0, 0, 0, self.light_dimensions)]
 		self.current_packet_plan_index = 0
 		
@@ -40,13 +44,14 @@ class Guitar:
 			
 	def update_pixel_allocation(self, light_dimensions):
 		self.light_dimensions = light_dimensions
-		self.run_lights(self.current_colors, self.select_mode)
+		self.run_lights(self.current_motion_colors, self.select_mode)
 			
 	def check_for_inactivity(self):
 		if self.is_active:
 			if (datetime.now() - self.last_input_datetime).total_seconds() > 10:
 				# this controller is now inactive so do stuff accordingly
 				self.is_active = False
+				self.current_colors = self.current_motion_colors = []
 								
 				# tell the rest of the system that they can release our pixels
 				self.light_sender.go_inactive(self.name)
@@ -77,13 +82,31 @@ class Guitar:
 			# set the select mode if necessary
 			self.select_mode = 0 if self.select_mode == 5 else self.select_mode + 1
 			print(f'SELECT_MODE = {self.select_mode}')
+			self.run_lights(self.current_motion_colors, mode=self.select_mode)
 			
 	def on_axis_moved(self, axis):
 		self.register_input()
 		device, value = self.get_axis_details(axis)
 		
 		if device == 'dpad' and value in ['up', 'down']:
+			self.current_motion_colors = list(self.current_colors)
 			self.run_lights(self.current_colors, mode=self.select_mode)
+			
+		elif device == 'dpad' and value in ['left']:
+			if self.motion_direction_index == 0:
+				self.motion_direction_index = 7
+			else:
+				self.motion_direction_index -= 1
+			print('Current motion direction = ' + self.motion_direction_list[self.motion_direction_index])
+			self.run_lights(self.current_motion_colors, mode=self.select_mode)
+		
+		elif device == 'dpad' and value in ['right']:
+			if self.motion_direction_index == 7:
+				self.motion_direction_index = 0
+			else:
+				self.motion_direction_index += 1
+			print('Current motion direction = ' + self.motion_direction_list[self.motion_direction_index])
+			self.run_lights(self.current_motion_colors, mode=self.select_mode)
 			
 		elif device == 'whammy':
 			dimming_ratio = self.calculate_whammy_dimming(value)
@@ -101,7 +124,9 @@ class Guitar:
 	
 	
 	def run_lights(self, color_list, mode=0):
+		L, H, D = self.light_dimensions
 		num_colors = len(color_list)
+		print(num_colors)
 		if num_colors == 0:
 			packet_plan = [Lights.make_whole_string_packet(0, 0, 0, self.light_dimensions)]
 			
@@ -113,38 +138,40 @@ class Guitar:
 				
 			elif mode == 1:
 				# lights form 1 block of each color that was pressed
-				packet_plan = [Lights.get_blocks_packet(colors_rgb, self.num_pixels)]
+				packet_plan = [Lights.get_blocks_packet(colors_rgb, self.light_dimensions)]
 			
 			else:  # moving modes
 				packet_plan = []
+				motion_dirs = self.motion_direction_list[self.motion_direction_index].split('_')
+				dir_kw_args = {x: True for x in motion_dirs}
 				if mode == 2:
 					# the lights in the string scroll perpetually in the same pattern as mode 0
-					packet = Lights.get_alternating_packet(colors_rgb, self.self.light_dimensions)
+					packet = Lights.get_alternating_packet(colors_rgb, self.light_dimensions)
 					for i in range(len(colors_rgb)):
-						packet_plan.append(Lights.shift_packet(packet, i, right=True))
+						packet_plan.append(Lights.shift_packet(packet, i, **dir_kw_args))
 					
 				elif mode == 3:
 					# the lights in the string scroll perpetually in the same pattern as mode 1
-					packet = Lights.get_blocks_packet(colors_rgb, self.num_pixels)
-					for i in range(self.num_pixels):
-						packet_plan.append(Lights.shift_packet(packet, i, right=True))
+					packet = Lights.get_blocks_packet(colors_rgb, self.light_dimensions)
+					for i in range(L):
+						packet_plan.append(Lights.shift_packet(packet, i, **dir_kw_args))
 					
 				elif mode == 4:
 					# the lights wipe on and off, alternating like in mode 0
-					packet = Lights.get_alternating_packet(colors_rgb, self.num_pixels)
-					for i in range(self.num_pixels):
+					packet = Lights.get_alternating_packet(colors_rgb, self.light_dimensions)
+					for i in range(L+1):
 						packet_plan.append(Lights.sub_packet(packet, i))
 					
-					for i in range(self.num_pixels -1, 0, -1):
+					for i in range(L-1, 0, -1):
 						packet_plan.append(Lights.sub_packet(packet, i))
 						
 				elif mode == 5:
 					# the lights wipe on and off, in color blocks like in mode 1
-					packet = Lights.get_blocks_packet(colors_rgb, self.num_pixels)
-					for i in range(self.num_pixels):
+					packet = Lights.get_blocks_packet(colors_rgb, self.light_dimensions)
+					for i in range(L+1):
 						packet_plan.append(Lights.sub_packet(packet, i))
 					
-					for i in range(self.num_pixels -1, 0, -1):
+					for i in range(L-1, 0, -1):
 						packet_plan.append(Lights.sub_packet(packet, i))
 					
 				self.last_motion_step_time = datetime.now()
@@ -179,7 +206,12 @@ class Guitar:
 	@staticmethod
 	def dim_packet(packet, dim_ratio):
 		if dim_ratio is not None:
-			new_packet = [int(x * dim_ratio) for x in packet]
+			new_packet = []
+			for grid in packet:
+				new_grid = []
+				for row in grid:
+					new_grid.append([(int(x[0] * dim_ratio), int(x[1] * dim_ratio), int(x[2] * dim_ratio)) for x in row])
+				new_packet.append(new_grid)
 		else:
 			new_packet = packet
 			

@@ -6,10 +6,10 @@ from Lights import Lights
 
 
 class Car:
-	def __init__(self, controller, name, num_pixels, light_sender):
+	def __init__(self, controller, name, light_dimensions, light_sender):
 		self.controller = controller
 		self.name = name
-		self.num_pixels = num_pixels
+		self.light_dimensions = light_dimensions
 		self.light_sender = light_sender
 		
 		self.last_input_datetime = datetime.now() - timedelta(hours=1)  # initialize to a long time ago so controller starts as inactive
@@ -18,6 +18,7 @@ class Car:
 		# start a thread to check periodically on the last input datetime and determine if the controller has gone inactive
 		self.check_for_inactivity()
 		
+		self.select_mode = 0
 		self.segment_size = 1
 		self.dim_ratio = 0
 		self.current_wheel_value = 0
@@ -25,7 +26,7 @@ class Car:
 		self.last_motion_step_time = datetime.now()
 		
 		self.current_colors = ['red', 'green']
-		self.current_packet_plan = self.make_packet_plan()
+		self.current_packet_plan = [[[[]]]]
 		self.current_packet_plan_index = 0
 		
 		for button in controller.buttons:
@@ -35,15 +36,19 @@ class Car:
 		for axis in controller.axes:
 			axis.when_moved = self.on_axis_moved
 			
-	def update_pixel_allocation(self, num_pixels):
-		self.num_pixels = num_pixels
-		self.current_packet_plan = self.make_packet_plan()
+	def update_pixel_allocation(self, light_dimensions):
+		self.light_dimensions = light_dimensions
+		L, H, D = light_dimensions
+		if L == 0 or H == 0 or D == 0:
+			self.current_packet_plan = [[[[]]]]
+		else:
+			self.current_packet_plan = self.make_packet_plan()
 		self.current_packet_plan_index = 0
 		self.update_lights()
 			
 	def check_for_inactivity(self):
 		if self.is_active:
-			if (datetime.now() - self.last_input_datetime).total_seconds() > 15:
+			if (datetime.now() - self.last_input_datetime).total_seconds() > 10:
 				# this controller is now inactive so do stuff accordingly
 				self.is_active = False
 								
@@ -61,31 +66,27 @@ class Car:
 	def on_button_pressed(self, button):
 		self.register_input()
 		color = self.get_friendly_button_name(button)
-		if color not in self.current_colors:
-			self.current_colors.append(color)
 		print(color, 'press')
 		
 	def on_button_released(self, button):
 		self.register_input()
 		
 		color = self.get_friendly_button_name(button)
-		if color in self.current_colors:
-			self.current_colors.remove(color)
 		print(color, 'release')
 		
 		packet_plan = []
 		if color == 'up_left':
-			# set the segment_size. This is used to control the size of segments for the alternating mode. Also have to regenerate the current_packet_base 
-			self.segment_size = 1 if self.segment_size == 4	 else self.segment_size + 1
-			print(f'segment_size = {self.segment_size}')
-
+			# change the mode between alternating and blocks
+			self.select_mode = 0 if self.select_mode == 1 else self.select_mode + 1
+			print(f'SELECT_MODE = {self.select_mode}')
+			
 			self.current_packet_plan = self.make_packet_plan()
 			self.current_packet_plan_index = 0
 			self.update_lights()
 			
 		elif color == 'up_right':
 			# change the colors and number of colors randomly
-			num_colors = random.randint(2,5)
+			num_colors = random.randint(2,4)
 			color_list = random.sample(Lights.COLOR_LIST, num_colors)
 			random.shuffle(color_list)
 			self.current_colors = color_list
@@ -94,13 +95,31 @@ class Car:
 			self.current_packet_plan_index = 0
 			self.update_lights()
 			
+		elif color == 'down_left':
+			# set the segment_size. This is used to control the size of segments for the alternating mode. Also have to regenerate the current_packet_base 
+			self.segment_size = 1 if self.segment_size == 4	 else self.segment_size + 1
+			print(f'segment_size = {self.segment_size}')
+
+			self.current_packet_plan = self.make_packet_plan()
+			self.current_packet_plan_index = 0
+			self.update_lights()
+			
 	def make_packet_plan(self):
+		L, H, D = self.light_dimensions
 		packet_plan = []
 		colors_rgb = [Lights.rgb_from_color(x) for x in self.current_colors]
-		packet = Lights.get_alternating_packet(colors_rgb, self.num_pixels, self.segment_size)
-		for i in range(len(colors_rgb)):
-			for j in range(self.segment_size):
-				packet_plan.append(Lights.shift_packet(packet, i * self.segment_size + j + 1, 'right'))
+		if self.select_mode == 0:
+			# alternating
+			packet = Lights.get_alternating_packet(colors_rgb, self.light_dimensions, self.segment_size)
+			for i in range(len(colors_rgb)):
+				for j in range(self.segment_size):
+					packet_plan.append(Lights.shift_packet(packet, i * self.segment_size + j + 1, right=True))
+					
+		elif self.select_mode == 1:
+			# blocks
+			packet = Lights.get_blocks_packet(colors_rgb, self.light_dimensions)
+			for i in range(L):
+				packet_plan.append(Lights.shift_packet(packet, i, right=True))
 				
 		return packet_plan
 
@@ -121,15 +140,20 @@ class Car:
 				# this means the wheel has moved so we need to process it
 				self.current_wheel_value = value2
 				self.direction, self.time_delay = self.calculate_wheel_time_delay(value2)
-				print(f'direction={self.direction}, time_delay={self.time_delay}')
+				# print(f'direction={self.direction}, time_delay={self.time_delay}')
 		
 		else:
 			print(f'{device} {value} {value2}')
 			
 	def update_lights(self):
 		# apply the current dimming ratio
-		new_packet = [int(x * self.dim_ratio) for x in self.current_packet_plan[self.current_packet_plan_index]]
-	
+		new_packet = []
+		for grid in self.current_packet_plan[self.current_packet_plan_index]:
+			new_grid = []
+			for row in grid:
+				new_grid.append([(int(x[0] * self.dim_ratio), int(x[1] * self.dim_ratio), int(x[2] * self.dim_ratio)) for x in row])
+			new_packet.append(new_grid)
+				
 		# invoke light updater
 		self.light_sender.set_lights(self.name, new_packet)
 		

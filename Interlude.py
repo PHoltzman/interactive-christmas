@@ -15,7 +15,7 @@ class Interlude:
 		
 		self.current_packet_plan = []
 		self.current_packet_plan_index = 0
-		self.time_delay = 0.05
+		self.time_delay = 0.25  # 0.05
 			
 	def update_pixel_allocation(self, light_dimensions):
 		self.light_dimensions = light_dimensions
