@@ -6,8 +6,6 @@ I am currently running on a raspberry pi 2 and using a SanDevices E682 to conver
 Check out broomfieldlights.com for way more about my Christmas light show and related things. The intent is to setup a secondary display in my side yard where people who come to see our light show can have a more hands-on experience and actually interact with some Christmas lights as well.
 
 ## TODO list
-- interface with guitar hero drum kit
-- Figure out how to do one time effects (pulse and fade out when a drum is hit but not repeating...put each drum in a corner and have the kick be the center square and have them pulse when hit)
 - Build a stand for the Logitech controller
 - Figure out why guitar dimming seems to encroach on neighbor and why allocation seems to have issues when 2 are active together
 - Add ability for controller to auto reconnect if it gets disconnected (guitar cord is a bit flaky when pulled)
@@ -34,3 +32,5 @@ Check out broomfieldlights.com for way more about my Christmas light show and re
 - Have light sender deactivate all controllers at shutdown and black out the lights
 - initial allocation to guitar doesn't go to black as expected
 - Get Car working with new setup of light_dimensions
+- interface with guitar hero drum kit
+- Figure out how to do one time effects (pulse and fade out when a drum is hit but not repeating...put each drum in a corner and have the kick be the center square and have them pulse when hit)

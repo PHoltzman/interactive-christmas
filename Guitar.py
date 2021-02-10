@@ -1,26 +1,16 @@
-import sched
 import threading
 from datetime import datetime, timedelta
 
+from BaseController import BaseController
 from Lights import Lights
 
-class Guitar:
+class Guitar(BaseController):
 	def __init__(self, controller, name, light_dimensions, light_sender):
-		self.controller = controller
-		self.name = name
-		self.light_dimensions = light_dimensions
-		self.light_sender = light_sender
-		
-		self.last_input_datetime = datetime.now() - timedelta(hours=1)  # initialize to a long time ago so controller starts as inactive
-		self.is_active = False
-		
-		# start a thread to check periodically on the last input datetime and determine if the controller has gone inactive
-		self.check_for_inactivity()
+		super().__init__(controller, name, light_dimensions, light_sender)
 		
 		self.current_mode = 0
 		self.select_mode = 0
 		self.selector_position = None
-		self.last_motion_step_time = self.last_input_datetime
 		self.dim_ratio = None
 		
 		self.motion_direction_list = ['right', 'down_right', 'down', 'down_left', 'left', 'up_left', 'up', 'up_right']
@@ -28,7 +18,7 @@ class Guitar:
 		
 		self.current_colors = []
 		self.current_motion_colors = []
-		self.current_packet_plan = [Lights.make_whole_string_packet(0, 0, 0, self.light_dimensions)]
+		self.current_packet_plan = [Lights.make_whole_string_packet((0, 0, 0), self.light_dimensions)]
 		self.current_packet_plan_index = 0
 		
 		for button in controller.buttons:
@@ -58,21 +48,15 @@ class Guitar:
 			
 		t = threading.Timer(5, self.check_for_inactivity).start()
 	
-	def register_input(self):
-		self.last_input_datetime = datetime.now()
-		if not self.is_active:
-			self.is_active = True
-			self.light_sender.go_active(self.name)
-	
 	def on_button_pressed(self, button):
-		self.register_input()
+		super().on_button_pressed(button)
 		color = self.get_friendly_button_name(button)
 		if color not in self.current_colors:
 			self.current_colors.append(color)
 		print(color, 'press')
 		
 	def on_button_released(self, button):
-		self.register_input()
+		super().on_button_released(button)
 		color = self.get_friendly_button_name(button)
 		if color in self.current_colors:
 			self.current_colors.remove(color)
@@ -85,7 +69,7 @@ class Guitar:
 			self.run_lights(self.current_motion_colors, mode=self.select_mode)
 			
 	def on_axis_moved(self, axis):
-		self.register_input()
+		super().on_axis_moved(axis)
 		device, value = self.get_axis_details(axis)
 		
 		if device == 'dpad' and value in ['up', 'down']:
@@ -126,9 +110,8 @@ class Guitar:
 	def run_lights(self, color_list, mode=0):
 		L, H, D = self.light_dimensions
 		num_colors = len(color_list)
-		print(num_colors)
 		if num_colors == 0:
-			packet_plan = [Lights.make_whole_string_packet(0, 0, 0, self.light_dimensions)]
+			packet_plan = [Lights.make_whole_string_packet((0, 0, 0), self.light_dimensions)]
 			
 		else:
 			colors_rgb = [Lights.rgb_from_color(x) for x in color_list]

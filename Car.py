@@ -2,39 +2,23 @@ import threading
 import random
 from datetime import datetime, timedelta
 
+from BaseController import BaseController
 from Lights import Lights
 
 
-class Car:
+class Car(BaseController):
 	def __init__(self, controller, name, light_dimensions, light_sender):
-		self.controller = controller
-		self.name = name
-		self.light_dimensions = light_dimensions
-		self.light_sender = light_sender
-		
-		self.last_input_datetime = datetime.now() - timedelta(hours=1)  # initialize to a long time ago so controller starts as inactive
-		self.is_active = False
-		
-		# start a thread to check periodically on the last input datetime and determine if the controller has gone inactive
-		self.check_for_inactivity()
+		super().__init__(controller, name, light_dimensions, light_sender)
 		
 		self.select_mode = 0
 		self.segment_size = 1
 		self.dim_ratio = 0
 		self.current_wheel_value = 0
 		self.direction, self.time_delay = self.calculate_wheel_time_delay(self.current_wheel_value)
-		self.last_motion_step_time = datetime.now()
 		
 		self.current_colors = ['red', 'green']
 		self.current_packet_plan = [[[[]]]]
 		self.current_packet_plan_index = 0
-		
-		for button in controller.buttons:
-			button.when_pressed = self.on_button_pressed
-			button.when_released = self.on_button_released
-			
-		for axis in controller.axes:
-			axis.when_moved = self.on_axis_moved
 			
 	def update_pixel_allocation(self, light_dimensions):
 		self.light_dimensions = light_dimensions
@@ -56,20 +40,9 @@ class Car:
 				self.light_sender.go_inactive(self.name)
 			
 		t = threading.Timer(5, self.check_for_inactivity).start()
-	
-	def register_input(self):
-		self.last_input_datetime = datetime.now()
-		if not self.is_active:
-			self.is_active = True
-			self.light_sender.go_active(self.name)
-	
-	def on_button_pressed(self, button):
-		self.register_input()
-		color = self.get_friendly_button_name(button)
-		print(color, 'press')
 		
 	def on_button_released(self, button):
-		self.register_input()
+		super().on_button_released(button)
 		
 		color = self.get_friendly_button_name(button)
 		print(color, 'release')
@@ -124,7 +97,7 @@ class Car:
 		return packet_plan
 
 	def on_axis_moved(self, axis):
-		self.register_input()
+		super().on_axis_moved(axis)
 		device, value, value2 = self.get_axis_details(axis)
 			
 		if device == 'gas_wheel':

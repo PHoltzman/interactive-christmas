@@ -238,15 +238,71 @@ class Lights:
 		return packet
 		
 	@staticmethod
+	def make_pulse_packet_plan(color_rgb, light_dimensions, frames=11):
+		base_plan = [Lights.make_whole_string_packet(color_rgb, light_dimensions) for x in range(frames)]
+		pulse_levels = [1 - (1 / frames) * x for x in range(frames)]
+		pulse_plan = [Lights.make_scale_packet(x, light_dimensions) for x in pulse_levels]
+		packet_plan = Lights.apply_dim_plan(base_plan, pulse_plan)
+		
+		return packet_plan
+		
+	@staticmethod
+	def apply_dim_plan(packet_plan, dim_plan):
+		# print(len(packet_plan))
+		# print(len(packet_plan[0]))
+		# print(len(packet_plan[0][0]))
+		# print(len(packet_plan[0][0][0]))
+		# print(len(dim_plan))
+		# print(len(dim_plan[0]))
+		# print(len(dim_plan[0][0]))
+		# print(len(dim_plan[0][0][0]))
+		final_plan = []
+		for i, packet in enumerate(packet_plan):
+			dim_packet = dim_plan[i]
+			final_packet = []
+			for j, grid in enumerate(packet):
+				dim_grid = dim_packet[j]
+				final_grid = []
+				for k, row in enumerate(grid):
+					dim_row = dim_grid[k]
+					final_row = [(int(a[0]*b), int(a[1]*b), int(a[2]*b)) for a,b in zip(row, dim_row)]
+					final_grid.append(final_row)
+				final_packet.append(final_grid)
+			final_plan.append(final_packet)
+					
+		return final_plan
+		
+	@staticmethod
+	def merge_packets(packets, light_dimensions):
+		# adds together the individual elements of all the provided packets
+		L, H, D = light_dimensions
+		new_packet = []
+		for i in range(D):
+			grid = []
+			for j in range(H):
+				row = []
+				for k in range(L):
+					pixels = [packet[i][j][k] for packet in packets]
+					r = min(sum([x[0] for x in pixels]), 255)
+					g = min(sum([x[1] for x in pixels]), 255)
+					b = min(sum([x[2] for x in pixels]), 255)
+					row.append((r,g,b))
+				grid.append(row)
+			new_packet.append(grid)
+			
+		return new_packet
+	
+	@staticmethod
 	def make_rainbow_row(num_pixels, color_shift=0):
 		colors = ["red", "orange", "yellow", "green", "blue", "purple"]
-		colors_rgb = [Lights.rgb_from_color(x) for x in colors]
+		new_colors = colors[color_shift:] + colors[:color_shift]
+		colors_rgb = [Lights.rgb_from_color(x) for x in new_colors]
 		packet = Lights.get_blocks_row(colors_rgb, num_pixels)
 		return packet
 		
 	@staticmethod
 	def make_interlude_packet_plan(light_dimensions):
-		# rainbow blocks scrolling one direction at 50% dimming
+		# rainbow blocks scrolling one direction at 10% dimming
 		# a full brightness hot spot scrolling the other direction at a different speed
 		# 3x around for dimming while only 1x around for rainbow
 		L, H, D = light_dimensions
@@ -293,31 +349,32 @@ class Lights:
 			dim_plan.append(new_dim_packet)
 		
 		# multiply the packet_plan by the dim_plan to get the final result
-		final_plan = []
-		for i, packet in enumerate(packet_plan):
-			dim_packet = dim_plan[i]
-			final_packet = []
-			for j, grid in enumerate(packet):
-				dim_grid = dim_packet[j]
-				final_grid = []
-				for k, row in enumerate(grid):
-					dim_row = dim_grid[k]
-					# print(row)
-					final_row = [(int(a[0]*b), int(a[1]*b), int(a[2]*b)) for a,b in zip(row, dim_row)]
-					final_grid.append(final_row)
-				final_packet.append(final_grid)
-			final_plan.append(final_packet)
+		final_plan = Lights.apply_dim_plan(packet_plan, dim_plan)
 					
 		return final_plan
 		
 	@staticmethod
-	def make_whole_string_packet(r, g, b, light_dimensions):
+	def make_scale_packet(scale_value, light_dimensions):
 		L, H, D = light_dimensions
 		packet = []
 		for i in range(D):
 			grid = []
 			for j in range(H):
-				row = [(r, g, b) for k in range(L)]
+				row = [scale_value for k in range(L)]
+				grid.append(row)
+			packet.append(grid)
+		
+		return packet
+					
+	
+	@staticmethod
+	def make_whole_string_packet(rgb, light_dimensions):
+		L, H, D = light_dimensions
+		packet = []
+		for i in range(D):
+			grid = []
+			for j in range(H):
+				row = [rgb for k in range(L)]
 				grid.append(row)
 			packet.append(grid)
 			
