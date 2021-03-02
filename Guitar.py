@@ -1,7 +1,7 @@
 import threading
 from datetime import datetime, timedelta
 
-from BaseController import BaseController
+from BaseController import BaseController, PacketPlan
 from Lights import Lights
 
 class Guitar(BaseController):
@@ -18,8 +18,7 @@ class Guitar(BaseController):
 		
 		self.current_colors = []
 		self.current_motion_colors = []
-		self.current_packet_plan = [Lights.make_whole_string_packet((0, 0, 0), self.light_dimensions)]
-		self.current_packet_plan_index = 0
+		self.main_packet_plan = PacketPlan([Lights.make_whole_string_packet((0, 0, 0), self.light_dimensions)])
 		
 		for button in controller.buttons:
 			button.when_pressed = self.on_button_pressed
@@ -29,7 +28,7 @@ class Guitar(BaseController):
 			if self.get_friendly_axis_name(axis.name) == 'selector':
 				# initialize selector switch
 				_, self.selector_position = self.get_axis_details(axis)
-				self.time_delay = self.get_time_delay_from_selector_position(self.selector_position)
+				self.main_packet_plan.time_delay = self.get_time_delay_from_selector_position(self.selector_position)
 			axis.when_moved = self.on_axis_moved
 			
 	def update_pixel_allocation(self, light_dimensions):
@@ -96,14 +95,14 @@ class Guitar(BaseController):
 			dimming_ratio = self.calculate_whammy_dimming(value)
 			self.dim_ratio = None if dimming_ratio == 1 else dimming_ratio
 			
-			new_packet = self.dim_packet(self.current_packet_plan[self.current_packet_plan_index], self.dim_ratio)
+			new_packet = self.dim_packet(self.main_packet_plan.get_current_packet(), self.dim_ratio)
 						
 			# invoke light updater
 			self.light_sender.set_lights(self.name, new_packet)
 				
 		elif device == 'selector':
 			self.selector_position = value
-			self.time_delay = self.get_time_delay_from_selector_position(self.selector_position)
+			self.main_packet_plan.time_delay = self.get_time_delay_from_selector_position(self.selector_position)
 			print(f'Selector Position = {value}')
 	
 	
@@ -111,80 +110,73 @@ class Guitar(BaseController):
 		L, H, D = self.light_dimensions
 		num_colors = len(color_list)
 		if num_colors == 0:
-			packet_plan = [Lights.make_whole_string_packet((0, 0, 0), self.light_dimensions)]
+			packet_plan = PacketPlan([Lights.make_whole_string_packet((0, 0, 0), self.light_dimensions)])
 			
 		else:
 			colors_rgb = [Lights.rgb_from_color(x) for x in color_list]
 			if mode == 0:
 				# lights alternate statically with each color that was pressed pixel by pixel
-				packet_plan = [Lights.get_alternating_packet(colors_rgb, self.light_dimensions)]
+				packet_plan = PacketPlan([Lights.get_alternating_packet(colors_rgb, self.light_dimensions)])
 				
 			elif mode == 1:
 				# lights form 1 block of each color that was pressed
-				packet_plan = [Lights.get_blocks_packet(colors_rgb, self.light_dimensions)]
+				packet_plan = PacketPlan([Lights.get_blocks_packet(colors_rgb, self.light_dimensions)])
 			
 			else:  # moving modes
-				packet_plan = []
+				packets = []
 				motion_dirs = self.motion_direction_list[self.motion_direction_index].split('_')
 				dir_kw_args = {x: True for x in motion_dirs}
 				if mode == 2:
 					# the lights in the string scroll perpetually in the same pattern as mode 0
 					packet = Lights.get_alternating_packet(colors_rgb, self.light_dimensions)
 					for i in range(len(colors_rgb)):
-						packet_plan.append(Lights.shift_packet(packet, i, **dir_kw_args))
+						packets.append(Lights.shift_packet(packet, i, **dir_kw_args))
 					
 				elif mode == 3:
 					# the lights in the string scroll perpetually in the same pattern as mode 1
 					packet = Lights.get_blocks_packet(colors_rgb, self.light_dimensions)
 					for i in range(L):
-						packet_plan.append(Lights.shift_packet(packet, i, **dir_kw_args))
+						packets.append(Lights.shift_packet(packet, i, **dir_kw_args))
 					
 				elif mode == 4:
 					# the lights wipe on and off, alternating like in mode 0
 					packet = Lights.get_alternating_packet(colors_rgb, self.light_dimensions)
 					for i in range(L+1):
-						packet_plan.append(Lights.sub_packet(packet, i))
+						packets.append(Lights.sub_packet(packet, i))
 					
 					for i in range(L-1, 0, -1):
-						packet_plan.append(Lights.sub_packet(packet, i))
+						packets.append(Lights.sub_packet(packet, i))
 						
 				elif mode == 5:
 					# the lights wipe on and off, in color blocks like in mode 1
 					packet = Lights.get_blocks_packet(colors_rgb, self.light_dimensions)
 					for i in range(L+1):
-						packet_plan.append(Lights.sub_packet(packet, i))
+						packets.append(Lights.sub_packet(packet, i))
 					
 					for i in range(L-1, 0, -1):
-						packet_plan.append(Lights.sub_packet(packet, i))
-					
-				self.last_motion_step_time = datetime.now()
-		
-		self.current_packet_plan = packet_plan
-		self.current_packet_plan_index = 0
-		
+						packets.append(Lights.sub_packet(packet, i))
+				
+				packet_plan = PacketPlan(packets, is_repeating=True, time_delay=self.get_time_delay_from_selector_position(self.selector_position))
+			
+		self.main_packet_plan = packet_plan
 		self.current_mode = mode
 		
 		# check whammy position and dim accordingly
-		new_packet = self.dim_packet(self.current_packet_plan[self.current_packet_plan_index], self.dim_ratio)
+		new_packet = self.dim_packet(self.main_packet_plan.get_current_packet(), self.dim_ratio)
 			
 		# invoke light updater
 		self.light_sender.set_lights(self.name, new_packet)
 		
 	def next_moving_step(self, current_time):
-		if self.current_mode > 1 and (current_time - self.last_motion_step_time).total_seconds() >= self.time_delay:
-			# shift the sequence
-			if self.current_packet_plan_index == len(self.current_packet_plan) - 1:
-				self.current_packet_plan_index = 0
-			else:
-				self.current_packet_plan_index += 1
-			
-			# check whammy position and dim accordingly
-			new_packet = self.dim_packet(self.current_packet_plan[self.current_packet_plan_index], self.dim_ratio)
-				
-			self.last_motion_step_time = current_time
-				
-			# invoke light updater
-			self.light_sender.set_lights(self.name, new_packet)
+		if self.current_mode > 1:
+			is_advanced, is_ended = self.main_packet_plan.advance_packet_plan(current_time)
+		
+			if is_advanced:
+				# check whammy position and dim accordingly
+				new_packet = self.dim_packet(self.main_packet_plan.get_current_packet(), self.dim_ratio)
+									
+				# invoke light updater
+				self.light_sender.set_lights(self.name, new_packet)
 
 	@staticmethod
 	def dim_packet(packet, dim_ratio):

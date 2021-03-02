@@ -1,6 +1,43 @@
 import threading
 from datetime import datetime, timedelta
 
+
+class PacketPlan:
+	def __init__(self, packet_plan=None, current_index=0, is_repeating=False, time_delay=1.0):
+		self.packet_plan = packet_plan if packet_plan is not None else []
+		self.current_index = current_index
+		self.is_repeating = is_repeating
+		self.time_delay = time_delay
+		self.last_motion_step_time = datetime.now()
+		
+	def get_current_packet(self):
+		try:
+			return self.packet_plan[self.current_index]
+		except IndexError:
+			return []
+		
+	def advance_packet_plan(self, current_time):
+		is_ended = False
+		is_advanced = False
+		if (current_time - self.last_motion_step_time).total_seconds() >= self.time_delay:
+			is_advanced = True
+		
+			if self.is_repeating:
+				if self.current_index == len(self.packet_plan) - 1:
+					self.current_index = 0
+				else:
+					self.current_index += 1
+					
+			else:
+				if self.current_index == len(self.packet_plan) - 1:
+					is_ended = True
+				else:
+					self.current_index += 1
+				
+			self.last_motion_step_time = current_time
+			
+		return is_advanced, is_ended
+
 class BaseController:
 	def __init__(self, controller, name, light_dimensions, light_sender):
 		self.controller = controller

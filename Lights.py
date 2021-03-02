@@ -1,4 +1,6 @@
 from random import randint
+from copy import deepcopy
+
 
 class Lights:
 	COLOR_LIST = ["green", "red", "yellow", "blue", "orange", "white", "black", "purple", "pink", "teal"]
@@ -54,7 +56,7 @@ class Lights:
 		# for up down shifting, need to rearrange each grid to do the shift
 		if up or down and H > 1:
 			pixels_to_shift_H = pixels_to_shift % H if pixels_to_shift >= H else pixels_to_shift
-			num = -1 * pixels_to_shift_H if down else pixels_to_shift_H
+			num = -1 * pixels_to_shift_H if up else pixels_to_shift_H
 			
 			'''
 			init = [
@@ -246,16 +248,103 @@ class Lights:
 		
 		return packet_plan
 		
+	def make_wipe_packet_plan(color_rgb, light_dimensions, start_pixel, frames=12, pulse_size=None):
+		base_plan = [Lights.make_whole_string_packet(color_rgb, light_dimensions) for x in range(frames)]
+		L, H, D = L1, H1, D1 = light_dimensions
+		left = right = up = down = forward = backward = False
+		
+		x, y, z = start_pixel
+		if x == 0 and y == 0 and z == 0:
+			# front/bottom/left corner
+			right = up = backward = True
+		elif x == L - 1 and y == 0 and z == 0:
+			# front/bottom/right corner
+			left = up = backward = True
+		elif x == L - 1 and y == H - 1 and z == 0:
+			# front/top/right corner
+			left = down = backward = True
+		elif x == 0 and y == H - 1 and z == 0:
+			# front/top/left corner
+			right = down = backward = True
+		elif x == 0 and y == 0 and z == D - 1:
+			# back/bottom/left corner
+			right = up = forward = True
+		elif x == L - 1 and y == 0 and z == D - 1:
+			# back/bottom/right corner 
+			left = up = forward = True
+		elif x == L - 1 and y == H - 1 and z == D - 1:
+			# back/top/right corner
+			left = down = forward = True
+		elif x == 0 and y == H - 1 and z == D - 1:
+			# back/top/left corner
+			right = down = forward = True
+			right = down = forward = True
+			right = down = forward = True
+		
+		else:
+			# starting from somewhere in the middle so wipe will go outward in all directions
+			# spread speed determined by the larger gap in each axis
+			L1 = max(x-0, L-1-x)
+			H1 = max(y-0, H-1-y)
+			D1 = max(z-0, D-1-z)
+			left = right = up = down = forward = back = True
+			
+		base_wipe_packet = Lights.make_scale_packet(0, light_dimensions)
+		
+		wipe_plan = []
+		for f in range(frames):
+			L_step = int(f * L1 / frames) + 1
+			H_step = int(f * H1 / frames) + 1
+			D_step = int(f * D1 / frames) + 1
+			if pulse_size is not None:
+				L_start = max(L_step - pulse_size, 0)
+				H_start = max(H_step - pulse_size, 0)
+				D_start = max(D_step - pulse_size, 0)
+			else:
+				L_start = H_start = D_start = 0
+			# print(L_step, H_step, D_step)
+			
+			packet = deepcopy(base_wipe_packet)
+	
+			for i in range(D_start, D_step):
+				d_vals = []
+				if forward:
+					d_vals.append(z-i)
+				if backward:
+					d_vals.append(z+i)
+					
+				for j in range(H_start, H_step):
+					h_vals = []
+					if up:
+						h_vals.append(y-j)
+					if down:
+						h_vals.append(y+j)
+						
+					for k in range(L_start, L_step):
+						l_vals = []
+						if left:
+							l_vals.append(x-k)
+						if right:
+							l_vals.append(x+k)
+							
+						# print(d_vals, h_vals, l_vals)
+						for dv in d_vals:
+							for hv in h_vals:
+								for lv in l_vals:
+									try:
+										packet[dv][hv][lv] = 1.0
+									except IndexError:
+										print(dv, hv, lv)
+										raise
+						
+			wipe_plan.append(packet)
+			
+		packet_plan = Lights.apply_dim_plan(base_plan, wipe_plan)
+		
+		return packet_plan
+		
 	@staticmethod
 	def apply_dim_plan(packet_plan, dim_plan):
-		# print(len(packet_plan))
-		# print(len(packet_plan[0]))
-		# print(len(packet_plan[0][0]))
-		# print(len(packet_plan[0][0][0]))
-		# print(len(dim_plan))
-		# print(len(dim_plan[0]))
-		# print(len(dim_plan[0][0]))
-		# print(len(dim_plan[0][0][0]))
 		final_plan = []
 		for i, packet in enumerate(packet_plan):
 			dim_packet = dim_plan[i]
@@ -368,8 +457,12 @@ class Lights:
 					
 	
 	@staticmethod
-	def make_whole_string_packet(rgb, light_dimensions):
+	def make_whole_string_packet(rgb, light_dimensions, scale_value=None):
 		L, H, D = light_dimensions
+		
+		if scale_value is not None:
+			rgb = (int(rgb[0]*scale_value), int(rgb[1]*scale_value), int(rgb[2]*scale_value))
+		
 		packet = []
 		for i in range(D):
 			grid = []

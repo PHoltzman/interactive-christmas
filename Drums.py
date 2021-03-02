@@ -2,18 +2,8 @@ import sched
 import threading
 from datetime import datetime, timedelta
 
-from BaseController import BaseController
+from BaseController import BaseController, PacketPlan
 from Lights import Lights
-
-
-class PacketPlan:
-	def __init__(self, packet_plan, current_index=0, is_repeating=False):
-		self.packet_plan = packet_plan
-		self.current_index = current_index
-		self.is_repeating = is_repeating
-		
-	def get_current_packet(self):
-		return self.packet_plan[self.current_index]
 
 class Drums(BaseController):
 	def __init__(self, controller, name, light_dimensions, light_sender):
@@ -21,9 +11,9 @@ class Drums(BaseController):
 		
 		self.time_delay = 0.05
 		
-		self.motion_direction_list = ['right', 'down_right', 'down', 'down_left', 'left', 'up_left', 'up', 'up_right']
-		self.motion_direction_index = 0
-		
+		self.mode = 0  # 0 = pulse boxes, 1 = pulse wipe spread from corners
+
+		# for mode 0
 		self.color_masks = {
 			"red": [[[]]],
 			"yellow": [[[]]],
@@ -32,10 +22,28 @@ class Drums(BaseController):
 			"orange": [[[]]]
 		}
 		
+		# for mode 1
+		self.color_spread_map = {}
+		
 		self.current_packet_plans = []
 			
 	def update_pixel_allocation(self, light_dimensions):
 		self.light_dimensions = L, H, D = light_dimensions
+		self.create_box_allocation_and_masks()
+		self.create_spread_starting_point()
+	
+	def create_spread_starting_point(self):
+		L, H, D = self.light_dimensions
+		self.color_spread_map = {
+			"red": (0, H-1, 0),
+			"yellow": (0, 0, 0),
+			"blue": (L-1, 0, 0),
+			"green": (L-1, H-1, 0),
+			"orange": (int(L/2), int(H/2), int(D/2))
+		}
+
+	def create_box_allocation_and_masks(self):
+		L, H, D = self.light_dimensions
 		
 		# establish the location for each drum on the grid
 		L_split = int(L/2)
@@ -90,18 +98,36 @@ class Drums(BaseController):
 		if color in ['red', 'yellow', 'blue', 'green', 'orange']:
 			L, H, D = self.light_dimensions
 		
-			# Make the pulse plan and multiply by the appropriate dimming mask
-			packet_plan = Lights.make_pulse_packet_plan(Lights.rgb_from_color(color), self.light_dimensions)
-			packet_plan = Lights.apply_dim_plan(packet_plan, [self.color_masks[color]]*len(packet_plan))
+			if self.mode == 0:
+				# Make the pulse plan and multiply by the appropriate dimming mask
+				packet_plan = Lights.make_pulse_packet_plan(Lights.rgb_from_color(color), self.light_dimensions)
+				packet_plan = Lights.apply_dim_plan(packet_plan, [self.color_masks[color]]*len(packet_plan))
 			
-			self.current_packet_plans.append(PacketPlan(packet_plan))
+				self.current_packet_plans.append(PacketPlan(packet_plan, time_delay=self.time_delay))
+				
+			elif self.mode == 1:
+				try:
+					packet_plan = Lights.make_wipe_packet_plan(Lights.rgb_from_color(color), self.light_dimensions, self.color_spread_map[color], pulse_size=3)
+					self.current_packet_plans.append(PacketPlan(packet_plan, time_delay=self.time_delay))
+				except KeyError:
+					print('Error finding color starting point for mode 1. Skipping for now and will try again next time')
+				
+		elif color == 'plus':
+			self.mode = 0 if self.mode == 1 else self.mode + 1
+			
+		elif color == 'minus':
+			self.mode = 1 if self.mode == 0 else self.mode - 1
 	
 	def update_lights(self):
 		# grab the current index for all active plans and merge those plans together
 		# if there are no active plans left, then set to black
 		if self.current_packet_plans:
 			packets_to_merge = [x.get_current_packet() for x in self.current_packet_plans]
-			packet = Lights.merge_packets(packets_to_merge, self.light_dimensions)
+			try:
+				packet = Lights.merge_packets(packets_to_merge, self.light_dimensions)
+			except IndexError:
+				print('Index error when merging packets, likely due to light dimensions being reallocated. Setting to black for now and expecting it to fix itself next time around')
+				packet = Lights.make_whole_string_packet((0, 0, 0), self.light_dimensions)
 		else:
 			packet = Lights.make_whole_string_packet((0, 0, 0), self.light_dimensions)
 			
@@ -109,31 +135,23 @@ class Drums(BaseController):
 		self.light_sender.set_lights(self.name, packet)
 		
 	def next_moving_step(self, current_time):
-		if (current_time - self.last_motion_step_time).total_seconds() >= self.time_delay:
-		
-			# shift the packet plans and remove any that are finished
-			indexes_to_remove = []
-			for i, packet_plan in enumerate(self.current_packet_plans):
-				if packet_plan.is_repeating:
-					if packet_plan.current_index == len(packet_plan.packet_plan) - 1:
-						packet_plan.current_index = 0
-					else:
-						packet_plan.current_index += 1
-						
-				else:
-					if packet_plan.current_index == len(packet_plan.packet_plan) - 1:
-						indexes_to_remove.append(i)
-					else:
-						packet_plan.current_index += 1
-						
-			for ind in indexes_to_remove:
-				try:
-					self.current_packet_plans.pop(ind)
-				except IndexError:
-					pass
+		is_any_advanced = False
+		indexes_to_remove = []
+		for i, packet_plan in enumerate(self.current_packet_plans):
+			is_advanced, is_ended = packet_plan.advance_packet_plan(current_time)
+			if is_advanced:
+				is_any_advanced = True
+			if is_ended:
+				indexes_to_remove.append(i)
 				
-			self.last_motion_step_time = current_time
-				
+		indexes_to_remove.sort(reverse=True)
+		for ind in indexes_to_remove:
+			try:
+				self.current_packet_plans.pop(ind)
+			except IndexError:
+				pass
+
+		if is_any_advanced:
 			# invoke light updater
 			self.update_lights()
 		
@@ -147,8 +165,8 @@ class Drums(BaseController):
 			"button_trigger_l": "orange",
 			"button_select": "select",
 			"button_start": "start",
-			"button_mode": "plus",
-			"button_thumb_l": "minus"
+			"button_mode": "minus",
+			"button_thumb_l": "plus"
 		}
 		try:
 			return button_mapping[button.name]

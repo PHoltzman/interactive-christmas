@@ -27,12 +27,12 @@ class LightSender:
 		self.universes = [
 			{
 				"universe": self.u23,
-				"pixel_indexes": [(x, 0, 0) for x in range(12)] + 
-					[(x, 1, 0) for x in range(11, -1, -1)] +
-					[(x, 2, 0) for x in range(12)] + 
-					[(x, 3, 0) for x in range(11, -1, -1)] +
-					[(x, 4, 0) for x in range(12)] + 
-					[(x, 5, 0) for x in range(11, -1, -1)]
+				"pixel_indexes": [(x, 5, 0) for x in range(12)] + 
+					[(x, 4, 0) for x in range(11, -1, -1)] +
+					[(x, 3, 0) for x in range(12)] + 
+					[(x, 2, 0) for x in range(11, -1, -1)] +
+					[(x, 1, 0) for x in range(12)] + 
+					[(x, 0, 0) for x in range(11, -1, -1)]
 			}
 		]
 

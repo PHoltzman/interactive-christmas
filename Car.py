@@ -2,7 +2,7 @@ import threading
 import random
 from datetime import datetime, timedelta
 
-from BaseController import BaseController
+from BaseController import BaseController, PacketPlan
 from Lights import Lights
 
 
@@ -10,24 +10,42 @@ class Car(BaseController):
 	def __init__(self, controller, name, light_dimensions, light_sender):
 		super().__init__(controller, name, light_dimensions, light_sender)
 		
+		self.macro_mode = 0
 		self.select_mode = 0
 		self.segment_size = 1
 		self.dim_ratio = 0
 		self.current_wheel_value = 0
-		self.direction, self.time_delay = self.calculate_wheel_time_delay(self.current_wheel_value)
+		self.current_gas_value = 0
+		self.current_brake_value = 0
 		
+		self.is_reverse_mode = False
+		self.is_reverse_mode_changed = False
+		self.wheel_direction, self.wheel_time_delay = self.calculate_wheel_time_delay(self.current_wheel_value)
+		self.gas_direction, self.gas_time_delay = self.calculate_gas_time_delay(self.current_gas_value)
+		
+		self.last_motion_step_time_wheel = self.last_input_datetime
+		self.last_motion_step_time_gas = self.last_input_datetime
+
 		self.current_colors = ['red', 'green']
-		self.current_packet_plan = [[[[]]]]
-		self.current_packet_plan_index = 0
+		self.main_packet_plan = PacketPlan()
+		self.temp_packet_plans = []
+		
+		# used for macro_mode 1
+		self.target_pixel = None
+		self.chase_pixel = None
+		self.walls = []
+		
+		print(f'Macro Mode = {self.macro_mode}')
 			
 	def update_pixel_allocation(self, light_dimensions):
 		self.light_dimensions = light_dimensions
 		L, H, D = light_dimensions
 		if L == 0 or H == 0 or D == 0:
-			self.current_packet_plan = [[[[]]]]
+			self.main_packet_plan = PacketPlan()
+			self.temp_packet_plans = []
 		else:
-			self.current_packet_plan = self.make_packet_plan()
-		self.current_packet_plan_index = 0
+			self.main_packet_plan = self.make_packet_plan()
+		self.chase_pixel = 0, 0, 0
 		self.update_lights()
 			
 	def check_for_inactivity(self):
@@ -40,7 +58,15 @@ class Car(BaseController):
 				self.light_sender.go_inactive(self.name)
 			
 		t = threading.Timer(5, self.check_for_inactivity).start()
-		
+	
+	def on_button_pressed(self, button):
+		super().on_button_pressed(button)
+		color = self.get_friendly_button_name(button)
+		if color == 'up_left':
+			if not self.is_reverse_mode:
+				self.is_reverse_mode = True
+				self.is_reverse_mode_changed = True
+	
 	def on_button_released(self, button):
 		super().on_button_released(button)
 		
@@ -49,13 +75,10 @@ class Car(BaseController):
 		
 		packet_plan = []
 		if color == 'up_left':
-			# change the mode between alternating and blocks
-			self.select_mode = 0 if self.select_mode == 1 else self.select_mode + 1
-			print(f'SELECT_MODE = {self.select_mode}')
-			
-			self.current_packet_plan = self.make_packet_plan()
-			self.current_packet_plan_index = 0
-			self.update_lights()
+			# for macro_mode 0, make the gas and brake pedal cause reverse directions
+			if self.is_reverse_mode:
+				self.is_reverse_mode = False
+				self.is_reverse_mode_changed = True
 			
 		elif color == 'up_right':
 			# change the colors and number of colors randomly
@@ -64,93 +87,279 @@ class Car(BaseController):
 			random.shuffle(color_list)
 			self.current_colors = color_list
 			
-			self.current_packet_plan = self.make_packet_plan()
-			self.current_packet_plan_index = 0
+			self.main_packet_plan = self.make_packet_plan()
 			self.update_lights()
 			
 		elif color == 'down_left':
-			# set the segment_size. This is used to control the size of segments for the alternating mode. Also have to regenerate the current_packet_base 
-			self.segment_size = 1 if self.segment_size == 4	 else self.segment_size + 1
-			print(f'segment_size = {self.segment_size}')
+			# change the mode between alternating and blocks
+			self.select_mode = 0 if self.select_mode == 1 else self.select_mode + 1
+			print(f'SELECT_MODE = {self.select_mode}')
+			
+			self.main_packet_plan = self.make_packet_plan()
+			self.update_lights()
+			
+			# # set the segment_size. This is used to control the size of segments for the alternating mode. Also have to regenerate the current_packet_base 
+			# self.segment_size = 1 if self.segment_size == 4	 else self.segment_size + 1
+			# print(f'segment_size = {self.segment_size}')
 
-			self.current_packet_plan = self.make_packet_plan()
-			self.current_packet_plan_index = 0
+			# self.current_packet_plan = self.make_packet_plan()
+			# self.current_packet_plan_index = 0
+			# self.update_lights()
+			
+		elif color == 'down_right':
+			# toggle macro modes between light control and the "chase the pixel" game
+			# 0 = lights, 1 = game
+			self.macro_mode = 0 if self.macro_mode == 1 else self.macro_mode + 1
+			print(f'Macro Mode = {self.macro_mode}')			
+			self.main_packet_plan = self.make_packet_plan()
 			self.update_lights()
 			
 	def make_packet_plan(self):
 		L, H, D = self.light_dimensions
-		packet_plan = []
-		colors_rgb = [Lights.rgb_from_color(x) for x in self.current_colors]
-		if self.select_mode == 0:
-			# alternating
-			packet = Lights.get_alternating_packet(colors_rgb, self.light_dimensions, self.segment_size)
-			for i in range(len(colors_rgb)):
-				for j in range(self.segment_size):
-					packet_plan.append(Lights.shift_packet(packet, i * self.segment_size + j + 1, right=True))
-					
-		elif self.select_mode == 1:
-			# blocks
-			packet = Lights.get_blocks_packet(colors_rgb, self.light_dimensions)
-			for i in range(L):
-				packet_plan.append(Lights.shift_packet(packet, i, right=True))
-				
-		return packet_plan
+		packets = []
+		
+		if self.macro_mode == 0:
+			colors_rgb = [Lights.rgb_from_color(x) for x in self.current_colors]
+			if self.select_mode == 0:
+				# alternating
+				packet = Lights.get_alternating_packet(colors_rgb, self.light_dimensions, self.segment_size)
+				for i in range(len(colors_rgb)):
+					for j in range(self.segment_size):
+						packets.append(Lights.shift_packet(packet, i * self.segment_size + j + 1, right=True))
+						
+			elif self.select_mode == 1:
+				# blocks
+				packet = Lights.get_blocks_packet(colors_rgb, self.light_dimensions)
+				for i in range(L):
+					packets.append(Lights.shift_packet(packet, i, right=True))
+		
+		elif self.macro_mode == 1:
+			self.chase_pixel = (0,0,0)
+			self.make_game_board(chase_position=self.chase_pixel)
+			packets.append(self.draw_game_board())
+		
+		return PacketPlan(packets)
 
 	def on_axis_moved(self, axis):
 		super().on_axis_moved(axis)
 		device, value, value2 = self.get_axis_details(axis)
-			
+		L, H, D = self.light_dimensions
+		
 		if device == 'gas_wheel':
-			# process gas pedal dimming
-			self.dim_ratio = self.calculate_gas_dimming(value)			
-			self.update_lights()
+			is_changed = False
+			normalized_gas_value = round((value + 1) / 2 * -1 + 1, 2)  # normalizes gas value to range of 0 (off) to 1 (on) with 2 decimal precision
+			if normalized_gas_value != self.current_gas_value:
+				# this means the pedal position has changed so we need to process it
+				is_changed = True
+				self.current_gas_value = normalized_gas_value
+				self.gas_direction, self.gas_time_delay = self.calculate_gas_time_delay(normalized_gas_value)
 			
 			# process steering wheel horizontal motion
 			if value2 is not None:
-				value2 = round(value2, 1)
-				
-			if value2 != self.current_wheel_value:
-				# this means the wheel has moved so we need to process it
-				self.current_wheel_value = value2
-				self.direction, self.time_delay = self.calculate_wheel_time_delay(value2)
-				# print(f'direction={self.direction}, time_delay={self.time_delay}')
+				normalized_wheel_value = round(value2, 1)
+				if normalized_wheel_value != self.current_wheel_value:
+					# this means the wheel has moved so we need to process it
+					is_changed = True
+					self.current_wheel_value = normalized_wheel_value
+					self.wheel_direction, self.wheel_time_delay = self.calculate_wheel_time_delay(normalized_wheel_value)
+			
+			if is_changed:
+				self.update_lights()
 		
 		else:
 			print(f'{device} {value} {value2}')
 			
 	def update_lights(self):
-		# apply the current dimming ratio
-		new_packet = []
-		for grid in self.current_packet_plan[self.current_packet_plan_index]:
-			new_grid = []
-			for row in grid:
-				new_grid.append([(int(x[0] * self.dim_ratio), int(x[1] * self.dim_ratio), int(x[2] * self.dim_ratio)) for x in row])
-			new_packet.append(new_grid)
-				
 		# invoke light updater
+		new_packet = self.main_packet_plan.get_current_packet()
+		if self.temp_packet_plans:
+			packets_to_merge = [new_packet] + [x.get_current_packet() for x in self.temp_packet_plans]
+			try:
+				new_packet = Lights.merge_packets(packets_to_merge, self.light_dimensions)
+			except IndexError:
+				print('Index error when merging packets, likely due to light dimensions being reallocated. Skipping merge and using main packet instead and expecting it to fix itself next time around')
+		
 		self.light_sender.set_lights(self.name, new_packet)
 		
 	def next_moving_step(self, current_time):
 		# determine when a sequence should be shifted
-		if self.direction is not None and (current_time - self.last_motion_step_time).total_seconds() >= self.time_delay:
-			# if direction is not None, that means the wheel is currently turned either left or right so we want motion
-			# if the current_time is greater than the last motion time by at least the time_delay amount, then we need to do a motion step
+		right = False
+		left = False
+		up = False
+		down = False
+		changed = False
+		
+		# if direction is not None, that means the wheel/gas is engaged so we want motion
+		# if the current_time is greater than the last motion time by at least the time_delay amount, then we need to do a motion step
+		if self.wheel_direction is not None and (current_time - self.last_motion_step_time_wheel).total_seconds() >= self.wheel_time_delay:
+			self.last_motion_step_time_wheel = current_time
 			
-			# shift the sequence
-			if self.direction == 'right':
-				if self.current_packet_plan_index == len(self.current_packet_plan) - 1:
-					self.current_packet_plan_index = 0
-				else:
-					self.current_packet_plan_index += 1
+			if self.wheel_direction == 'right':
+				right = True
 			else:
-				if self.current_packet_plan_index == 0:
-					self.current_packet_plan_index = len(self.current_packet_plan) - 1
+				left = True
+			changed = True
+			
+		indexes_to_remove = []
+		for i, packet_plan in enumerate(self.temp_packet_plans):
+			is_advanced, is_ended = packet_plan.advance_packet_plan(current_time)
+			if is_advanced:
+				changed = True
+			if is_ended:
+				indexes_to_remove.append(i)
+				
+		indexes_to_remove.sort(reverse=True)
+		for ind in indexes_to_remove:
+			try:
+				self.temp_packet_plans.pop(ind)
+			except IndexError:
+				pass
+				
+		if self.macro_mode == 0:
+			if self.gas_direction is not None and ((current_time - self.last_motion_step_time_gas).total_seconds() >= self.gas_time_delay or self.is_reverse_mode_changed):
+				self.last_motion_step_time_gas = current_time
+				if self.is_reverse_mode_changed:
+					self.is_reverse_mode_changed = False
+					self.gas_direction, self.gas_time_delay = self.calculate_gas_time_delay(self.current_gas_value)
+					
+				if self.gas_direction == 'up':
+					up = True
 				else:
-					self.current_packet_plan_index -= 1
+					down = True
+				changed = True
+				
+		elif self.macro_mode == 1:
+			H = self.light_dimensions[1]
+			desired_height = round(self.current_gas_value * H)
+			if self.chase_pixel[1] + 1 != desired_height:
+				changed = True
+
+		if changed:
+			if self.macro_mode == 0:
+				# shift the sequence
+				packet = Lights.shift_packet(self.main_packet_plan.get_current_packet(), 1, left=left, right=right, up=up, down=down)
+				self.main_packet_plan = PacketPlan([packet])
+				self.update_lights()
+				
+			elif self.macro_mode == 1:
+				reached_target, hit_walls = self.move_chase_pixel(self.main_packet_plan.get_current_packet(), left=left, right=right, up=up, down=down, height_val=desired_height)
+				if reached_target:
+					self.make_game_board(chase_position=self.chase_pixel)
+					pulse_plan = PacketPlan(Lights.make_pulse_packet_plan(Lights.rgb_from_color('green'), self.light_dimensions, frames=6), time_delay=0.05)
+					self.temp_packet_plans.append(pulse_plan)
+					
+				self.main_packet_plan = PacketPlan([self.draw_game_board()])
+				self.main_packet_plan.last_motion_step_time = current_time
+				self.update_lights()
+	
+	def move_chase_pixel(self, packet, left=None, right=None, up=None, down=None, height_val=None):
+		L, H, D = self.light_dimensions
+		x, y, z = self.chase_pixel
+		reached_target = False
+		hit_wall = False
+		
+		if left:
+			x = x if x == 0 else x - 1
+		if right:
+			x = x if x == L - 1 else x + 1
 			
-			self.last_motion_step_time = current_time
+		lr_pixel = x, y, z
+		if lr_pixel in self.walls:
+			hit_wall = True
+			return reached_target, hit_wall
+		
+		if lr_pixel == self.target_pixel:
+			reached_target = True
+			self.chase_pixel = lr_pixel
+			return reached_target, hit_wall
+		
+		# if up:
+			# y = y if y == 0 else y - 1
+		# if down:
+			# y = y if y == H - 1 else y + 1
+		
+		ud_pixel = lr_pixel
+		if height_val is not None:
+			delta = height_val - y
+			if delta < 0:
+				step_val = -1
+			else:
+				step_val = 1
 			
-		self.update_lights()
+			for step in range(0, abs(delta)):
+				new_y = y + step_val
+				if new_y < 0:
+					new_y = 0
+				elif new_y > H - 1:
+					new_y = H - 1
+					
+				new_ud_pixel = x, new_y, z
+				if new_ud_pixel in self.walls:
+					hit_wall = True
+					self.chase_pixel = ud_pixel
+					return reached_target, hit_wall
+				
+				if new_ud_pixel == self.target_pixel:
+					reached_target = True
+					self.chase_pixel = ud_pixel
+				
+				ud_pixel = new_ud_pixel
+		
+		# ud_pixel = x, y, z
+		# if ud_pixel in self.walls:
+			# hit_wall = True
+			# self.chase_pixel = lr_pixel
+			# return reached_target, hit_wall
+		
+		# if ud_pixel == self.target_pixel:
+			# reached_target = True
+			# self.chase_pixel = lr_pixel
+			# return reached_target, hit_wall
+			
+		# TODO: add 3rd dimension
+		
+		self.chase_pixel = ud_pixel
+		return reached_target, hit_wall
+		
+	def make_game_board(self, chase_position=(0,0,0)):
+		L, H, D = self.light_dimensions
+		num_pixels = L * H * D
+		num_wall_pixels = int(num_pixels / 5)
+		
+		# create walls
+		self.walls = []
+		for i in range(num_wall_pixels):
+			wall = chase_position
+			while wall == chase_position or wall in self.walls:
+				wall = (random.randrange(0, L), random.randrange(0, H), random.randrange(0, D))
+			self.walls.append(wall)
+		
+		# create a target randomly on the board and make sure it isn't on the chase pixel or on the walls
+		target = chase_position
+		while target == chase_position or target in self.walls:
+			target = (random.randrange(0, L), random.randrange(0, H), random.randrange(0, D))
+			
+		self.target_pixel = target
+		
+		print(f'Game board layout:')
+		print(f'\tchase_pixel = {chase_position}')
+		print(f'\ttarget_pixel = {self.target_pixel}')
+		print(f'\twalls = {self.walls}')
+		
+	def draw_game_board(self):
+		L, H, D = self.light_dimensions
+		packet = Lights.make_whole_string_packet((255, 255, 255), self.light_dimensions, scale_value=0.1)
+		for wall in self.walls:
+			k, j, i = wall
+			packet[i][j][k] = (255, 0, 0)
+			
+		k, j, i = self.target_pixel
+		packet[i][j][k] = (0, 255, 0)
+		
+		k, j, i = self.chase_pixel
+		packet[i][j][k] = (0, 0, 255)
+		
+		return packet
 	
 	@staticmethod
 	def get_axis_details(axis):
@@ -192,9 +401,18 @@ class Car(BaseController):
 		except KeyError:
 			return button.name
 		
-	@staticmethod
-	def calculate_gas_dimming(gas_value):
-		return (gas_value + 1) / 2 * -1 + 1 # make it fully positive and scale for 0 (untouched) to 1 (fully engaged)
+	def calculate_gas_time_delay(self, normalized_gas_value):
+		# don't scroll at all when gas pedal is off
+		# scroll fast when pressed all the way in
+		x = normalized_gas_value
+		if x == 0:
+			return None, None	
+		else:
+			direction = 'down' if self.is_reverse_mode else 'up'
+			a = .1
+			delay = a*x*x - 1.2*a*x - 0.5625*x + 0.2*a + 0.6125
+			
+			return direction, delay
 		
 	@staticmethod
 	def calculate_wheel_time_delay(wheel_value):
@@ -207,7 +425,8 @@ class Car(BaseController):
 		else:
 			direction = 'right' if wheel_value > 0 else 'left'
 			a = .1
-			delay = a*x*x - 1.2*a*x - 0.5625*x + 0.2*a + 0.6125 
+			delay = a*x*x - 1.2*a*x - 0.5625*x + 0.2*a + 0.6125
+			
 			return direction, delay
 			
 			
