@@ -5,7 +5,8 @@ from datetime import datetime, timedelta
 from Lights import Lights
 
 class Interlude:
-	def __init__(self, name, light_dimensions, light_sender):
+	def __init__(self, logger, name, light_dimensions, light_sender):
+		self.logger = logger
 		self.name = name
 		self.light_dimensions = light_dimensions
 		self.light_sender = light_sender

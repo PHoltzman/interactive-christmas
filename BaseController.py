@@ -39,11 +39,13 @@ class PacketPlan:
 		return is_advanced, is_ended
 
 class BaseController:
-	def __init__(self, controller, name, light_dimensions, light_sender):
+	def __init__(self, controller, logger, name, light_dimensions, light_sender, gui=None):
 		self.controller = controller
+		self.logger = logger
 		self.name = name
 		self.light_dimensions = light_dimensions
 		self.light_sender = light_sender
+		self.gui = gui
 		
 		self.last_input_datetime = datetime.now() - timedelta(hours=1)  # initialize to a long time ago so controller starts as inactive
 		self.last_motion_step_time = self.last_input_datetime
@@ -73,6 +75,8 @@ class BaseController:
 		if not self.is_active:
 			self.is_active = True
 			self.light_sender.go_active(self.name)
+			if self.gui is not None:
+				self.gui.set_status('Active', self.name)
 			
 	def update_pixel_allocation(self, light_dimensions):
 		raise NotImplementedError

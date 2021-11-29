@@ -5,15 +5,14 @@ from BaseController import BaseController, PacketPlan
 from Lights import Lights
 
 class Guitar(BaseController):
-	def __init__(self, controller, name, light_dimensions, light_sender):
-		super().__init__(controller, name, light_dimensions, light_sender)
+	def __init__(self, controller, logger, name, light_dimensions, light_sender, gui):
+		super().__init__(controller, logger, name, light_dimensions, light_sender, gui)
 		
-		self.current_mode = 0
 		self.select_mode = 0
 		self.selector_position = None
 		self.dim_ratio = None
 		
-		self.motion_direction_list = ['right', 'down_right', 'down', 'down_left', 'left', 'up_left', 'up', 'up_right']
+		self.motion_direction_list = ['right', 'up', 'forward', 'left', 'down', 'backward']
 		self.motion_direction_index = 0
 		
 		self.current_colors = []
@@ -41,9 +40,13 @@ class Guitar(BaseController):
 				# this controller is now inactive so do stuff accordingly
 				self.is_active = False
 				self.current_colors = self.current_motion_colors = []
+				self.motion_direction_index = 0
+				self.select_mode = 0
 								
 				# tell the rest of the system that they can release our pixels
 				self.light_sender.go_inactive(self.name)
+				if self.gui is not None:
+					self.gui.set_guitar_status('Inactive')
 			
 		t = threading.Timer(5, self.check_for_inactivity).start()
 	
@@ -52,19 +55,20 @@ class Guitar(BaseController):
 		color = self.get_friendly_button_name(button)
 		if color not in self.current_colors:
 			self.current_colors.append(color)
-		print(color, 'press')
+		self.logger.info(f"{color} press")
 		
 	def on_button_released(self, button):
 		super().on_button_released(button)
 		color = self.get_friendly_button_name(button)
 		if color in self.current_colors:
 			self.current_colors.remove(color)
-		print(color, 'release')
+		self.logger.info(f"{color} release")
 		
 		if color == 'select':
 			# set the select mode if necessary
 			self.select_mode = 0 if self.select_mode == 5 else self.select_mode + 1
-			print(f'SELECT_MODE = {self.select_mode}')
+			self.logger.info(f'Guitar Select Mode = {self.select_mode}')
+			self.light_sender.write_log_entry(self.name, f"mode_{self.select_mode}_active")
 			self.run_lights(self.current_motion_colors, mode=self.select_mode)
 			
 	def on_axis_moved(self, axis):
@@ -77,18 +81,18 @@ class Guitar(BaseController):
 			
 		elif device == 'dpad' and value in ['left']:
 			if self.motion_direction_index == 0:
-				self.motion_direction_index = 7
+				self.motion_direction_index = len(self.motion_direction_list) - 1
 			else:
 				self.motion_direction_index -= 1
-			print('Current motion direction = ' + self.motion_direction_list[self.motion_direction_index])
+			self.logger.info('Current motion direction = ' + self.motion_direction_list[self.motion_direction_index])
 			self.run_lights(self.current_motion_colors, mode=self.select_mode)
 		
 		elif device == 'dpad' and value in ['right']:
-			if self.motion_direction_index == 7:
+			if self.motion_direction_index == len(self.motion_direction_list) - 1:
 				self.motion_direction_index = 0
 			else:
 				self.motion_direction_index += 1
-			print('Current motion direction = ' + self.motion_direction_list[self.motion_direction_index])
+			self.logger.info('Current motion direction = ' + self.motion_direction_list[self.motion_direction_index])
 			self.run_lights(self.current_motion_colors, mode=self.select_mode)
 			
 		elif device == 'whammy':
@@ -103,7 +107,7 @@ class Guitar(BaseController):
 		elif device == 'selector':
 			self.selector_position = value
 			self.main_packet_plan.time_delay = self.get_time_delay_from_selector_position(self.selector_position)
-			print(f'Selector Position = {value}')
+			self.logger.info(f'Guitar Selector Position = {value}')
 	
 	
 	def run_lights(self, color_list, mode=0):
@@ -115,51 +119,42 @@ class Guitar(BaseController):
 		else:
 			colors_rgb = [Lights.rgb_from_color(x) for x in color_list]
 			if mode == 0:
-				# lights alternate statically with each color that was pressed pixel by pixel
-				packet_plan = PacketPlan([Lights.get_alternating_packet(colors_rgb, self.light_dimensions)])
-				
-			elif mode == 1:
 				# lights form 1 block of each color that was pressed
 				packet_plan = PacketPlan([Lights.get_blocks_packet(colors_rgb, self.light_dimensions)])
+				
+			elif mode == 1:
+				# lights alternate statically with each color that was pressed pixel by pixel
+				packet_plan = PacketPlan([Lights.get_alternating_packet(colors_rgb, self.light_dimensions)])
 			
 			else:  # moving modes
 				packets = []
 				motion_dirs = self.motion_direction_list[self.motion_direction_index].split('_')
 				dir_kw_args = {x: True for x in motion_dirs}
 				if mode == 2:
+					# the lights in the string scroll perpetually in the same pattern as mode 1
+					packet = Lights.get_blocks_packet(colors_rgb, self.light_dimensions)
+					for i in range(L):
+						packets.append(Lights.shift_packet(packet, i, **dir_kw_args))
+						
+				elif mode == 3:
 					# the lights in the string scroll perpetually in the same pattern as mode 0
 					packet = Lights.get_alternating_packet(colors_rgb, self.light_dimensions)
 					for i in range(len(colors_rgb)):
 						packets.append(Lights.shift_packet(packet, i, **dir_kw_args))
 					
-				elif mode == 3:
-					# the lights in the string scroll perpetually in the same pattern as mode 1
-					packet = Lights.get_blocks_packet(colors_rgb, self.light_dimensions)
-					for i in range(L):
-						packets.append(Lights.shift_packet(packet, i, **dir_kw_args))
-					
 				elif mode == 4:
-					# the lights wipe on and off, alternating like in mode 0
-					packet = Lights.get_alternating_packet(colors_rgb, self.light_dimensions)
-					for i in range(L+1):
-						packets.append(Lights.sub_packet(packet, i))
-					
-					for i in range(L-1, 0, -1):
-						packets.append(Lights.sub_packet(packet, i))
-						
-				elif mode == 5:
-					# the lights wipe on and off, in color blocks like in mode 1
+					# the lights wipe on and off, in color blocks like in mode 0
 					packet = Lights.get_blocks_packet(colors_rgb, self.light_dimensions)
-					for i in range(L+1):
-						packets.append(Lights.sub_packet(packet, i))
-					
-					for i in range(L-1, 0, -1):
-						packets.append(Lights.sub_packet(packet, i))
+					packets = Lights.make_wipe_plan(packet, motion_dirs[0])
 				
+				elif mode == 5:
+					# the lights wipe on and off, alternating like in mode 1
+					packet = Lights.get_alternating_packet(colors_rgb, self.light_dimensions)
+					packets = Lights.make_wipe_plan(packet, motion_dirs[0])
+						
 				packet_plan = PacketPlan(packets, is_repeating=True, time_delay=self.get_time_delay_from_selector_position(self.selector_position))
 			
 		self.main_packet_plan = packet_plan
-		self.current_mode = mode
 		
 		# check whammy position and dim accordingly
 		new_packet = self.dim_packet(self.main_packet_plan.get_current_packet(), self.dim_ratio)
@@ -168,7 +163,7 @@ class Guitar(BaseController):
 		self.light_sender.set_lights(self.name, new_packet)
 		
 	def next_moving_step(self, current_time):
-		if self.current_mode > 1:
+		if self.select_mode > 1:
 			is_advanced, is_ended = self.main_packet_plan.advance_packet_plan(current_time)
 		
 			if is_advanced:

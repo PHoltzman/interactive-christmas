@@ -6,6 +6,10 @@ I am currently running on a raspberry pi 2 and using a SanDevices E682 to conver
 Check out broomfieldlights.com for way more about my Christmas light show and related things. The intent is to setup a secondary display in my side yard (or possibly neighbor's yard) where people who come to see our light show can have a more hands-on experience and actually interact with some Christmas lights as well.
 
 ## TODO list
+- Build an adjustable stand for the Logitech controller
+- Waterproof the controllers
+- Create a user interface to display what's happening and basic instructions
+- Add virtual light display option for testing
 - Add ability for controller to auto reconnect if it gets disconnected (guitar cord is a bit flaky when pulled)
 - Figure out why guitar dimming seems to encroach on neighbor and why allocation seems to have issues when 2 are active together. Might be related to allocation issues. Not sure but something is going on
 - Figure out a merge effect where all controllers work together to affect all of the lights rather than subdividing the pixels
@@ -15,18 +19,24 @@ Check out broomfieldlights.com for way more about my Christmas light show and re
 	- Perhaps have a different "Golden button" on a pedestal that someone can hit to enter the mode
 - Add more games
 	- Play 2 person game of tag or something like that (similar to catch the pixel but someone else controls the target with a different controller)
-- Add third dimension of lights
+	- catch falling objects?
 - Get additional controllers (DJ Hero scratch pad?)
-- Build an adjustable stand for the Logitech controller
 - Add sound when the guitar is played
 	- Have a mode for chords? Another mode for solo effects?
 		- Perhaps use the headstock buttons for chords and the neck buttons for soloing?
 	- Allow chords to be in different keys or just have 1 set of options? (I, IV, V, VIm, IIm)
-- Waterproof the controllers
-- Test out routerless operation with crossover cable directly connecting rpi and E682
-- Figure out how to present instructions in an easily consumable way for people who walk up
 
 ## TO-DONE list
+- Fix bug in allocation mappings causing weird behavior and array to increase in size
+- Add option for enemies in car game (variable number based on button)
+- Make game wall density selectable
+- Use brake for car to go down rather than a reverse button
+- Make guitar motions and wipes go all directions
+- Create instruction sheets to present instructions in an easily consumable way for people who walk up
+- Add tracking for how long each controller is in use
+- Auto turn on/off display based on time of day
+- Use paddle shifters for car to go in third dimension
+- Add third dimension of lights
 - Create an interlude sequence to play when all controllers have gone inactive in order to draw attention
 - Have lights mapped across multiple universes and work out how to send properly
 - Move from 1 dimensional lights to 2D or 3D (my brain hurts trying to figure out how to make this interesting creatively and fabricate all the patterns...1D has been hard enough)
