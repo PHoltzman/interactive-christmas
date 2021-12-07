@@ -36,7 +36,7 @@ class Guitar(BaseController):
 			
 	def check_for_inactivity(self):
 		if self.is_active:
-			if (datetime.now() - self.last_input_datetime).total_seconds() > 10:
+			if (datetime.now() - self.last_input_datetime).total_seconds() > 15:
 				# this controller is now inactive so do stuff accordingly
 				self.is_active = False
 				self.current_colors = self.current_motion_colors = []

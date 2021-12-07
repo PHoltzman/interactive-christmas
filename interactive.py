@@ -13,24 +13,34 @@ from Car import Car
 from LightSender import LightSender
 from Gui import Gui
 
+os.environ['DISPLAY'] = ':0.0'
+gui = None
+
+# setup logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+log_formatter = logging.Formatter(fmt="%(asctime)s.%(msecs)03d %(levelname)s %(filename)s[%(funcName)s] %(message)s", datefmt='%Y-%m-%dT%H:%M:%S')
+sh = logging.StreamHandler(stream=sys.stdout)
+sh.setFormatter(log_formatter)
+logger.addHandler(sh)
+trfh = logging.handlers.TimedRotatingFileHandler("logs/log.log", when="midnight")
+trfh.setFormatter(log_formatter)
+logger.addHandler(trfh)
+
+def sigterm_handler(signal, frame):
+	logger.info('Received SIGTERM')
+	light_sender.stop()
+	if gui is not None:
+		gui.window.close()
+	sys.exit(0)
+
+signal.signal(signal.SIGTERM, sigterm_handler)
+
 
 try:
-	# setup logging
-	logger = logging.getLogger()
-	logger.setLevel(logging.INFO)
-	log_formatter = logging.Formatter(fmt="%(asctime)s.%(msecs)03d %(levelname)s %(filename)s[%(funcName)s] %(message)s", datefmt='%Y-%m-%dT%H:%M:%S')
-	sh = logging.StreamHandler(stream=sys.stdout)
-	sh.setFormatter(log_formatter)
-	logger.addHandler(sh)
-	trfh = logging.handlers.TimedRotatingFileHandler("logs/log.log", when="midnight")
-	trfh.setFormatter(log_formatter)
-	logger.addHandler(trfh)
-	
 	light_sender = LightSender(logger)
-	os.environ['DISPLAY'] = ':0.0'
 	# gui = Gui()
-	gui = None
-	
+
 	with Xbox360Controller(0, axis_threshold=0.2) as controller:
 		controller.info()
 		light_sender.add_controller('drums', Drums(controller, logger, 'drums', (0, 0, 0), light_sender, gui))
@@ -47,6 +57,7 @@ try:
 					gui.set_guitar_status('Inactive')
 					gui.set_car_status('Inactive')
 					gui.set_drum_status('Inactive')
+					
 				signal.pause()
 		
 except KeyboardInterrupt:
@@ -55,3 +66,4 @@ except KeyboardInterrupt:
 	if gui is not None:
 		gui.window.close()
 	sys.exit(1)
+	

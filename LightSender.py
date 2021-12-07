@@ -10,12 +10,12 @@ CONTROLLER_IP = "192.168.0.105"
 ACTIVITY_FILE = "/home/pi/interactive-lights/activity.txt"
 
 # real times
-# START_TIME = time(16,55,0)
-# STOP_TIME = time(22,0,0)
+START_TIME = time(16,45,0)
+STOP_TIME = time(22,0,0)
 
 # test times
-START_TIME = time(0,0,0)
-STOP_TIME = time(23,59,59)
+# START_TIME = time(0,0,0)
+# STOP_TIME = time(23,59,59)
 
 MASTER_DIMMING = 0.3
 
@@ -31,12 +31,22 @@ class LightSender:
 		self.sender.activate_output(3)
 		self.sender.activate_output(4)
 		self.sender.activate_output(5)
+		self.sender.activate_output(6)
+		self.sender.activate_output(7)
+		self.sender.activate_output(8)
+		self.sender.activate_output(9)
+		self.sender.activate_output(10)
 		self.universe_senders = [
 			self.sender[1],
 			self.sender[2],
 			self.sender[3],
 			self.sender[4],
-			self.sender[5]
+			self.sender[5],
+			self.sender[6],
+			self.sender[7],
+			self.sender[8],
+			self.sender[9],
+			self.sender[10]
 		]
 		for x in self.universe_senders:
 			x.destination = CONTROLLER_IP
@@ -46,26 +56,33 @@ class LightSender:
 		self.is_active = self.time_check()
 		
 		# set up the light matrix mapping
-		self.light_dimensions = L, H, D = 10, 10, 5	# L, H, D
+		self.light_dimensions = L, H, D = 20, 10, 5	# L, H, D
 		self.blackout_packet = self.make_blackout_packet()
 		self.current_packet = self.make_blackout_packet()
 		
 		# pixel indexes are stored as left/right, up/down, forward/backward or pixel, row, grid
 		
 		self.universes = []
-		for i, sender in enumerate(self.universe_senders):
+		for d, sender in enumerate(self.universe_senders):
+			if d < 5:
+				i = d
+				a = 0
+			else:
+				i = d - 5
+				a = 10
+				
 			d = {
 				"universe": sender,
-				"pixel_indexes": [(0, x, i) for x in range(10)] +
-					[(1, x, i) for x in range(9, -1, -1)] +
-					[(2, x, i) for x in range(10)] +
-					[(3, x, i) for x in range(9, -1, -1)] +
-					[(4, x, i) for x in range(10)] +
-					[(5, x, i) for x in range(9, -1, -1)] +
-					[(6, x, i) for x in range(10)] +
-					[(7, x, i) for x in range(9, -1, -1)] +
-					[(8, x, i) for x in range(10)] +
-					[(9, x, i) for x in range(9, -1, -1)]
+				"pixel_indexes": [(a+0, x, i) for x in range(10)] +
+					[(a+1, x, i) for x in range(9, -1, -1)] +
+					[(a+2, x, i) for x in range(10)] +
+					[(a+3, x, i) for x in range(9, -1, -1)] +
+					[(a+4, x, i) for x in range(10)] +
+					[(a+5, x, i) for x in range(9, -1, -1)] +
+					[(a+6, x, i) for x in range(10)] +
+					[(a+7, x, i) for x in range(9, -1, -1)] +
+					[(a+8, x, i) for x in range(10)] +
+					[(a+9, x, i) for x in range(9, -1, -1)]
 			}
 			self.universes.append(d)
 			
@@ -175,6 +192,23 @@ class LightSender:
 		entry = f"{now} {controller_name} {state}\n"
 		with open(ACTIVITY_FILE, 'a') as f:
 			f.write(entry)
+			
+	@staticmethod
+	def determine_L_vals(L, num_active):
+		# first determine the allocation size for each
+		new_L = int(L / num_active)
+		L_array = [new_L] * num_active
+		add_ind = 0
+		while sum(L_array) < L:
+			L_array[add_ind] += 1
+			add_ind += 1
+			
+		# now generate the actual cutoff points for each
+		L_ranges = []
+		for i, val in enumerate(L_array):
+			L_ranges.append((sum(L_array[:i]), sum(L_array[:i+1])-1))
+			
+		return L_ranges
 		
 	def allocate_pixels(self, is_final=False):		
 		num_active = len([k for k, v in self.controllers.items() if v["is_active"]])
@@ -184,11 +218,12 @@ class LightSender:
 			pixel_ranges = [([0, L-1], [0, H-1], [0, D-1])]
 			self.controllers['interlude']['is_active'] = True if not is_final else False
 		else:
-			new_L = int(L / num_active)
+			L_ranges = self.determine_L_vals(L, num_active)
+				
 			pixel_ranges = []
-			for i in range(num_active):
+			for item in L_ranges:
 				# pixel_range is tuple of L, H, D ranges
-				pixel_range = [new_L*i, new_L*i+new_L-1], [0, H-1], [0, D-1]
+				pixel_range = [item[0], item[1]], [0, H-1], [0, D-1]
 				pixel_ranges.append(pixel_range)
 		
 		range_index = 0

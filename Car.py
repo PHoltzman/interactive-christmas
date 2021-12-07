@@ -50,7 +50,6 @@ class Car(BaseController):
 	def update_pixel_allocation(self, light_dimensions):
 		self.light_dimensions = light_dimensions
 		L, H, D = light_dimensions
-		self.logger.info(f"{L} {H} {D}")
 		if L == 0 or H == 0 or D == 0:
 			self.main_packet_plan = PacketPlan()
 			self.temp_packet_plans = []
@@ -62,7 +61,7 @@ class Car(BaseController):
 			
 	def check_for_inactivity(self):
 		if self.is_active:
-			if (datetime.now() - self.last_input_datetime).total_seconds() > 10:
+			if (datetime.now() - self.last_input_datetime).total_seconds() > 15:
 				# this controller is now inactive so do stuff accordingly
 				self.is_active = False
 				self.macro_mode = 0
@@ -145,16 +144,20 @@ class Car(BaseController):
 			# mode 1: move in the z axis one pixel
 			
 			if color == 'paddle_up':
-				self.paddle_click_direction = 'forward'
-				if self.current_paddle_value < 5:
-					self.current_paddle_value += 1
+				if self.macro_mode == 0:
+					if self.current_paddle_value < 5:
+						self.current_paddle_value += 1
+					self.paddle_direction, self.paddle_time_delay = self.calculate_paddle_time_delay(self.current_paddle_value)
+				else:
+					self.paddle_click_direction = 'forward'
 			
 			elif color == 'paddle_down':
-				self.paddle_click_direction = 'backward'
-				if self.current_paddle_value > -5:
-					self.current_paddle_value -= 1
-				
-			self.paddle_direction, self.paddle_time_delay = self.calculate_paddle_time_delay(self.current_paddle_value)
+				if self.macro_mode == 0:
+					if self.current_paddle_value > -5:
+						self.current_paddle_value -= 1
+					self.paddle_direction, self.paddle_time_delay = self.calculate_paddle_time_delay(self.current_paddle_value)
+				else:
+					self.paddle_click_direction = 'backward'
 			
 	def make_packet_plan(self):
 		L, H, D = self.light_dimensions
@@ -323,6 +326,7 @@ class Car(BaseController):
 				
 				if hit_enemy:
 					# make a brand new game board
+					self.logger.info('Hit enemy at location: {self.chase_pixel}')
 					self.chase_pixel = (0,0,0)
 					self.make_game_board(chase_position=self.chase_pixel)
 					pulse_plan = PacketPlan(Lights.make_pulse_packet_plan(Lights.rgb_from_color('red'), self.light_dimensions, frames=6), time_delay=0.05)
@@ -330,25 +334,32 @@ class Car(BaseController):
 				
 				elif reached_target:
 					# make a new game board but keep the chase pixel and the enemies in current locations
+					self.logger.info(f'Reached target at location: {self.chase_pixel}')
 					self.make_game_board(chase_position=self.chase_pixel, create_new_enemies=False)
 					pulse_plan = PacketPlan(Lights.make_pulse_packet_plan(Lights.rgb_from_color('green'), self.light_dimensions, frames=6), time_delay=0.05)
 					self.temp_packet_plans.append(pulse_plan)
 				
 				elif enemy_changed:
+					any_hit_target = False
 					new_enemies = []
 					for enemy in self.enemies:
-						new_enemy, enemy_reached_target, enemy_hit_walls = self.move_enemy_pixel(self.main_packet_plan.get_current_packet(), enemy) 
-						if enemy_reached_target:
-							# this means we hit the enemy moved onto the chase pixel and we should flash red and make a new game board
-							self.chase_pixel = (0,0,0)
-							self.make_game_board(chase_position=self.chase_pixel)
-							pulse_plan = PacketPlan(Lights.make_pulse_packet_plan(Lights.rgb_from_color('red'), self.light_dimensions, frames=6), time_delay=0.05)
-							self.temp_packet_plans.append(pulse_plan)
-							break
+						if not any_hit_target:
+							# if an earlier one hit the target, then don't check the next ones, just keep them where they are
+							new_enemy, enemy_reached_target, enemy_hit_walls = self.move_enemy_pixel(self.main_packet_plan.get_current_packet(), enemy) 
+							if enemy_reached_target:
+								# this means the enemy moved onto the chase pixel and we should flash red and make a new game board
+								any_hit_target = True
+								self.chase_pixel = (0,0,0)
+								self.make_game_board(chase_position=self.chase_pixel)
+								pulse_plan = PacketPlan(Lights.make_pulse_packet_plan(Lights.rgb_from_color('red'), self.light_dimensions, frames=6), time_delay=0.05)
+								self.temp_packet_plans.append(pulse_plan)
 							
 						else:
-							# update with the new enemy location
-							new_enemies.append(new_enemy)
+							# just keep the enemy where it is as the starting point for next time since a different one hit the target
+							new_enemy = enemy
+							
+						# add the enemy back to the list
+						new_enemies.append(new_enemy)
 							
 					self.enemies = new_enemies
 										

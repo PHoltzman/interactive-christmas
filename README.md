@@ -1,33 +1,40 @@
 # interactive-christmas
-Python code to accept input from controllers and use it to run Christmas lights. As of 3/1/2021, this is a work in progress and will likely continue for the rest of the year and beyond. The ultimate goal is to have multiple different input devices controlling a 3 dimensional grid of LED RGB pixels. For this first year, I am anticipating a grid that is 20 pixels long by 10 pixels high, by 10 pixels deep, though that is just a guess at what is reasonably achievable and won't cost too much. The controllers are each given a subsection of the lights to control and the code automatically detects when a controller is no longer being used and reallocates the space to the remaining controllers still in use.
+Python code to accept input from controllers and use it to run Christmas lights. As of 12/7/2021, this is a work in progress (but is functional) and will likely continue for the rest of the year and beyond. The ultimate goal is to have multiple different input devices controlling a 3 dimensional grid of LED RGB pixels. For this first year, we have a matrix of 1000 pixels that is 20 long x 10 high x 10 deep. The controllers are each given a subsection of the lights to control and the code automatically detects when a controller is no longer being used and reallocates the space to the remaining controllers still in use.
 
 I am currently running on a raspberry pi 2 and using a SanDevices E682 to convert the E1.31 data into actual commands to the pixels.
 
-Check out broomfieldlights.com for way more about my Christmas light show and related things. The intent is to setup a secondary display in my side yard (or possibly neighbor's yard) where people who come to see our light show can have a more hands-on experience and actually interact with some Christmas lights as well.
+Check out broomfieldlights.com for way more about my Christmas light show and related things. This runs as a secondary display in my neighbor's yard where people who come to see our light show can have a more hands-on experience and actually interact with some Christmas lights as well. For more details on this display specifically, go to https://broomfieldlights.com/interactive-light-display/
+
+
 
 ## TODO list
-- Build an adjustable stand for the Logitech controller
+- Update readme to document better the general structure and how the various threads interact
 - Waterproof the controllers
 - Create a user interface to display what's happening and basic instructions
-- Add virtual light display option for testing
 - Add ability for controller to auto reconnect if it gets disconnected (guitar cord is a bit flaky when pulled)
-- Figure out why guitar dimming seems to encroach on neighbor and why allocation seems to have issues when 2 are active together. Might be related to allocation issues. Not sure but something is going on
-- Figure out a merge effect where all controllers work together to affect all of the lights rather than subdividing the pixels
+- Add virtual light display option for testing
+- Figure out a merge effect where all controllers work together to affect all of the lights rather than subdividing the pixels?
 	- To start, have a button on each controller than can be used to enter this mode
 		- "Start" on guitar, bottom left button on steering wheel
 		- Only enter the mode if all active controllers are pressing their magic button simultaneously
 	- Perhaps have a different "Golden button" on a pedestal that someone can hit to enter the mode
 - Add more games
-	- Play 2 person game of tag or something like that (similar to catch the pixel but someone else controls the target with a different controller)
-	- catch falling objects?
+	- Play 2 person game of tag or something like that (similar to catch the pixel but someone else controls the target with a different controller)?
+	- catch falling objects game (control size of catcher, mode to move along bottom or along front face, variable speed of objects)
+	- guitar hero or drum hero games where you play the right colors at the right time 
+	- Drive through a maze without touching the walls (mode to control width of track and/or complexity)
 - Get additional controllers (DJ Hero scratch pad?)
+- Add other ways to interact (website form? text? tweet? camera?)
 - Add sound when the guitar is played
 	- Have a mode for chords? Another mode for solo effects?
 		- Perhaps use the headstock buttons for chords and the neck buttons for soloing?
 	- Allow chords to be in different keys or just have 1 set of options? (I, IV, V, VIm, IIm)
+- Build foot piano
 
 ## TO-DONE list
-- Fix bug in allocation mappings causing weird behavior and array to increase in size
+- Figure out why enemies disappear in car game sometimes after board resets
+- Build other 5 panels
+- Figure out why guitar dimming (and other things) seems to encroach on neighbor and why allocation seems to have issues when 2 are active together. Might be related to allocation issues. Not sure but something is going on (off by one error when pixels allocated to controllers were merged back into the master packet, which caused the master packet to increase in size over time)
 - Add option for enemies in car game (variable number based on button)
 - Make game wall density selectable
 - Use brake for car to go down rather than a reverse button

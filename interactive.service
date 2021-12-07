@@ -1,0 +1,14 @@
+[Unit]
+Description=Interactive Lights
+After=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+Environment="PATH=/home/pi/interactive-lights/env39/bin"
+WorkingDirectory=/home/pi/interactive-lights
+ExecStart=/home/pi/interactive-lights/env39/bin/python /home/pi/interactive-lights/interactive.py
+
+[Install]
+WantedBy=multi-user.target

@@ -11,7 +11,7 @@ class Drums(BaseController):
 		
 		self.time_delay = 0.05
 		
-		self.mode = 0  # 0 = pulse boxes, 1 = pulse wipe spread from corners
+		self.mode = 1  # 0 = pulse boxes, 1 = pulse wipe spread from corners
 
 		# for mode 0
 		self.color_masks = {
@@ -103,10 +103,10 @@ class Drums(BaseController):
 			
 	def check_for_inactivity(self):
 		if self.is_active:
-			if (datetime.now() - self.last_input_datetime).total_seconds() > 10:
+			if (datetime.now() - self.last_input_datetime).total_seconds() > 15:
 				# this controller is now inactive so do stuff accordingly
 				self.is_active = False
-				self.mode = 0
+				self.mode = 1
 								
 				# tell the rest of the system that they can release our pixels
 				self.light_sender.go_inactive(self.name)
@@ -161,7 +161,7 @@ class Drums(BaseController):
 			try:
 				packet = Lights.merge_packets(packets_to_merge, self.light_dimensions)
 			except IndexError:
-				self.logger.error('Index error when merging packets, likely due to light dimensions being reallocated. Setting to black for now and expecting it to fix itself next time around')
+				self.logger.warning('Index error when merging packets, likely due to light dimensions being reallocated. Setting to black for now and expecting it to fix itself next time around')
 				packet = Lights.make_whole_string_packet((0, 0, 0), self.light_dimensions)
 		else:
 			packet = Lights.make_whole_string_packet((0, 0, 0), self.light_dimensions)
