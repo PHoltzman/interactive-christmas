@@ -8,11 +8,23 @@ Check out broomfieldlights.com for way more about my Christmas light show and re
 
 
 ## TODO list
+- Add virtual light display option for testing
+- Build MazeGame
+- Add 500 more pixels to the display to make 30x10x5
+- Build DDR controller
+- Add delayed game start with quick countdown
+- Put game title up when switching to a game
+- Put score after losing a game
+- Build PongGame
+- Build CentipedeGame
+- Build PixelCatchGame
+- Build DrumHeroGame
+- Build GuitarHeroGame
+- Reduce lag on drum (perhaps pre-calculate the lights better)
 - Update readme to document better the general structure and how the various threads interact
 - Waterproof the controllers
 - Create a user interface to display what's happening and basic instructions
 - Add ability for controller to auto reconnect if it gets disconnected (guitar cord is a bit flaky when pulled)
-- Add virtual light display option for testing
 - Figure out a merge effect where all controllers work together to affect all of the lights rather than subdividing the pixels?
 	- To start, have a button on each controller than can be used to enter this mode
 		- "Start" on guitar, bottom left button on steering wheel
@@ -23,6 +35,8 @@ Check out broomfieldlights.com for way more about my Christmas light show and re
 	- catch falling objects game (control size of catcher, mode to move along bottom or along front face, variable speed of objects)
 	- guitar hero or drum hero games where you play the right colors at the right time 
 	- Drive through a maze without touching the walls (mode to control width of track and/or complexity)
+	- Snake (select between 2D on the front grid and 3D, use car controller to move)
+	- Centipede?
 - Get additional controllers (DJ Hero scratch pad?)
 - Add other ways to interact (website form? text? tweet? camera?)
 - Add sound when the guitar is played
@@ -30,8 +44,10 @@ Check out broomfieldlights.com for way more about my Christmas light show and re
 		- Perhaps use the headstock buttons for chords and the neck buttons for soloing?
 	- Allow chords to be in different keys or just have 1 set of options? (I, IV, V, VIm, IIm)
 - Build foot piano
-
+ 
 ## TO-DONE list
+- Maintain snake length across reallocation in SnakeGame
+- Build SnakeGame
 - Figure out why enemies disappear in car game sometimes after board resets
 - Build other 5 panels
 - Figure out why guitar dimming (and other things) seems to encroach on neighbor and why allocation seems to have issues when 2 are active together. Might be related to allocation issues. Not sure but something is going on (off by one error when pixels allocated to controllers were merged back into the master packet, which caused the master packet to increase in size over time)

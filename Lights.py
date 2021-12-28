@@ -7,6 +7,7 @@ class Lights:
 	# packet plan is a 4 dimensional array
 	# Time array around LxWxD around LxW around L
 	# row, grid, packet, packet_plan
+	
 	@staticmethod
 	def rgb_from_color(color_name):
 		if color_name == 'green':
@@ -29,6 +30,47 @@ class Lights:
 			return 100, 0, 255
 		else:
 			return 0, 0, 0
+	
+	@staticmethod
+	def get_gradient_cutoffs(delta, num_sections):
+		step = int(delta / num_sections)
+		step_array = [step] * (num_sections - 1)
+		# add_ind = 0
+		# while sum(step_array) < delta:
+			# step_array[add_ind] += 1
+			# add_ind += 1
+					
+		# now generate the actual cutoff points for each
+		color_vals = []
+		for i, val in enumerate(step_array):
+			color_vals.append(sum(step_array[:i+1]))
+		
+		return color_vals
+	
+	@staticmethod
+	def make_gradient_colors(num_pixels, start_color, end_color):
+		colors = []
+		if num_pixels == 1:
+			colors.append(start_color)
+			
+		elif num_pixels == 2:
+			colors.append(start_color)
+			colors.append(end_color)
+			
+		else:
+			r1, g1, b1 = start_color
+			r2, g2, b2 = end_color
+			r_vals = Lights.get_gradient_cutoffs(r2 - r1, num_pixels - 1)
+			g_vals = Lights.get_gradient_cutoffs(g2 - g1, num_pixels - 1)
+			b_vals = Lights.get_gradient_cutoffs(b2 - b1, num_pixels - 1)
+			
+			colors.append(start_color)
+			for i in range(len(r_vals)):
+				item = r1 + r_vals[i], g1 + g_vals[i], b1 + b_vals[i]
+				colors.append(item)
+			colors.append(end_color)
+				
+		return colors
 			
 	@staticmethod
 	def make_wipe_plan(packet, direction):

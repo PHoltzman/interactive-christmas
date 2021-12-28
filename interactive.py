@@ -1,12 +1,14 @@
 import signal
 import logging
 import logging.handlers
+import threading
 import os
 import sys
 from datetime import datetime
 
 from xbox360controller import Xbox360Controller
 
+import global_vars
 from Guitar import Guitar
 from Drums import Drums
 from Car import Car
@@ -37,28 +39,44 @@ def sigterm_handler(signal, frame):
 signal.signal(signal.SIGTERM, sigterm_handler)
 
 
+def establish_controller(index, logger, light_sender, gui):
+	try:
+		controller = Xbox360Controller(index=index)
+		logger.info(controller.name)
+	except Exception:
+		logger.error(f'Encountered exception initiating controller at index {index}', exc_info=True)
+		return
+		
+	if 'Drum' in controller.name:
+		light_sender.add_controller('drums', Drums(controller, logger, 'drums', (0, 0, 0), light_sender, gui), 1)
+	elif 'WingMan' in controller.name:
+		controller.axis_threshold=0.05
+		light_sender.add_controller('car', Car(controller, logger, 'car', (0, 0, 0), light_sender, gui), 2)
+	elif 'Guitar' in controller.name:
+		light_sender.add_controller('guitar1', Guitar(controller, logger, 'guitar1', (0, 0, 0), light_sender, gui), 3)
+	else:
+		logger.error(f'Unrecognized controller found with name {controller.name}. Skipping it.')
+		controller.close()
+		
+
+def check_controllers():
+	indexes = [0, 1, 2]
+	for index in indexes:
+		establish_controller(index, logger, light_sender, gui)
+	
+	
 try:
 	light_sender = LightSender(logger)
 	# gui = Gui()
-
-	with Xbox360Controller(0, axis_threshold=0.2) as controller:
-		controller.info()
-		light_sender.add_controller('drums', Drums(controller, logger, 'drums', (0, 0, 0), light_sender, gui))
+	
+	check_controllers()	
+	
+	if gui is not None:
+		gui.set_guitar_status('Inactive')
+		gui.set_car_status('Inactive')
+		gui.set_drum_status('Inactive')
 		
-		with Xbox360Controller(2, axis_threshold=0.05) as controller:
-			controller.info()
-			light_sender.add_controller('car', Car(controller, logger, 'car', (0, 0, 0), light_sender, gui))
-				
-			with Xbox360Controller(1, axis_threshold=0.2) as controller:
-				controller.info()
-				light_sender.add_controller('guitar1', Guitar(controller, logger, 'guitar1', (0, 0, 0), light_sender, gui))
-				
-				if gui is not None:
-					gui.set_guitar_status('Inactive')
-					gui.set_car_status('Inactive')
-					gui.set_drum_status('Inactive')
-					
-				signal.pause()
+	signal.pause()
 		
 except KeyboardInterrupt:
 	logger.info('Received keyboard interrupt')

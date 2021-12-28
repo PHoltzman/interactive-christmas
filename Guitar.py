@@ -1,6 +1,7 @@
 import threading
 from datetime import datetime, timedelta
 
+import global_vars
 from BaseController import BaseController, PacketPlan
 from Lights import Lights
 
@@ -47,8 +48,9 @@ class Guitar(BaseController):
 				self.light_sender.go_inactive(self.name)
 				if self.gui is not None:
 					self.gui.set_guitar_status('Inactive')
-			
-		t = threading.Timer(5, self.check_for_inactivity).start()
+		
+		if not global_vars.STOP_THREADS:
+			t = threading.Timer(5, self.check_for_inactivity).start()
 	
 	def on_button_pressed(self, button):
 		super().on_button_pressed(button)

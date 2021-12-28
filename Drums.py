@@ -2,6 +2,7 @@ import sched
 import threading
 from datetime import datetime, timedelta
 
+import global_vars
 from BaseController import BaseController, PacketPlan
 from Lights import Lights
 
@@ -34,13 +35,6 @@ class Drums(BaseController):
 	
 	def create_spread_starting_point(self):
 		L, H, D = self.light_dimensions
-		# self.color_spread_map = {
-			# "red": [(0, 0, 0), (0, 0, D-1)],
-			# "yellow": [(0, H-1, 0), (0, H-1, D-1)],
-			# "blue": [(L-1, H-1, 0), (L-1, H-1, D-1)],
-			# "green": [(L-1, 0, 0), (L-1, 0, D-1)],
-			# "orange": [(int(L/2), int(H/2), int(D/2))]
-		# }
 		
 		self.color_spread_map = {
 			"red": {
@@ -110,8 +104,9 @@ class Drums(BaseController):
 								
 				# tell the rest of the system that they can release our pixels
 				self.light_sender.go_inactive(self.name)
-			
-		t = threading.Timer(5, self.check_for_inactivity).start()
+		
+		if not global_vars.STOP_THREADS:
+			t = threading.Timer(5, self.check_for_inactivity).start()
 	
 	def on_button_pressed(self, button):
 		super().on_button_pressed(button)
