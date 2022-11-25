@@ -6,11 +6,11 @@ from time import sleep
 import global_vars
 from Interlude import Interlude
 
-TEST_MODE = False
+TEST_MODE = True
 
 BASE_MOTION_DELAY_SECS = 0.05
 TIME_CHECK_TIMER_SECS = 5
-CONTROLLER_IP = "192.168.0.105"
+
 ACTIVITY_FILE = "/home/pi/interactive-lights/activity.txt"
 
 # real times
@@ -18,10 +18,12 @@ if TEST_MODE:
 	START_TIME = time(0,0,0)
 	STOP_TIME = time(23,59,59)
 	MASTER_DIMMING = 0.85
+	CONTROLLER_IP = "192.168.1.13"
 else:
 	START_TIME = time(16,0,0)
 	STOP_TIME = time(22,15,0)
 	MASTER_DIMMING = 0.3
+	CONTROLLER_IP = "192.168.0.105"
 
 class LightSender:
 	def __init__(self, logger):

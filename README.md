@@ -9,25 +9,29 @@ Check out broomfieldlights.com for way more about my Christmas light show and re
 
 ## TODO list
 - Add virtual light display option for testing
-- Build MazeGame
-- Add 500 more pixels to the display to make 30x10x5
-- Build DDR controller
+	- Do this by having a second process setup as sACN receiver for the purposes of display. This will best mimic reality
+- Add better distinct backgrounds for each game to help make boundaries more obvious
 - Add delayed game start with quick countdown
 - Put game title up when switching to a game
 - Put score after losing a game
+- Enhance usage tracking
+- Reduce lag on drum (perhaps pre-calculate the lights better)
+
+- Build MazeGame
+- Add 500 more pixels to the display to make 30x10x5
+- Build DDR controller
 - Build PongGame
 - Build CentipedeGame
 - Build PixelCatchGame
 - Build DrumHeroGame
 - Build GuitarHeroGame
-- Reduce lag on drum (perhaps pre-calculate the lights better)
+- Build TetrisGame
 - Update readme to document better the general structure and how the various threads interact
 - Waterproof the controllers
 - Create a user interface to display what's happening and basic instructions
 - Add ability for controller to auto reconnect if it gets disconnected (guitar cord is a bit flaky when pulled)
 - Figure out a merge effect where all controllers work together to affect all of the lights rather than subdividing the pixels?
 	- To start, have a button on each controller than can be used to enter this mode
-		- "Start" on guitar, bottom left button on steering wheel
 		- Only enter the mode if all active controllers are pressing their magic button simultaneously
 	- Perhaps have a different "Golden button" on a pedestal that someone can hit to enter the mode
 - Add more games
@@ -35,8 +39,6 @@ Check out broomfieldlights.com for way more about my Christmas light show and re
 	- catch falling objects game (control size of catcher, mode to move along bottom or along front face, variable speed of objects)
 	- guitar hero or drum hero games where you play the right colors at the right time 
 	- Drive through a maze without touching the walls (mode to control width of track and/or complexity)
-	- Snake (select between 2D on the front grid and 3D, use car controller to move)
-	- Centipede?
 - Get additional controllers (DJ Hero scratch pad?)
 - Add other ways to interact (website form? text? tweet? camera?)
 - Add sound when the guitar is played
