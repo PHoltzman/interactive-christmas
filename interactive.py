@@ -61,6 +61,7 @@ def establish_controller(index, logger, light_sender, gui):
 
 def check_controllers():
 	indexes = [0, 1, 2]
+	# indexes = [0, 1]
 	for index in indexes:
 		establish_controller(index, logger, light_sender, gui)
 	

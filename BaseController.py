@@ -1,10 +1,13 @@
 import threading
 from datetime import datetime, timedelta
 
+class InvalidPacketSize(Exception):
+	pass
+	
 
 class PacketPlan:
-	def __init__(self, packet_plan=None, current_index=0, is_repeating=False, time_delay=1.0):
-		self.packet_plan = packet_plan if packet_plan is not None else []
+	def __init__(self, packet_time_series=None, current_index=0, is_repeating=False, time_delay=1.0):
+		self.packet_time_series = packet_time_series if packet_time_series is not None else []
 		self.current_index = current_index
 		self.is_repeating = is_repeating
 		self.time_delay = time_delay
@@ -12,9 +15,21 @@ class PacketPlan:
 		
 	def get_current_packet(self):
 		try:
-			return self.packet_plan[self.current_index]
+			return self.packet_time_series[self.current_index]
 		except IndexError:
 			return []
+			
+	def validate_packet_time_series(self, light_dimensions):
+		L, H, D = light_dimensions
+		for m, packet in enumerate(self.packet_time_series):
+			if len(packet) != D:
+				raise InvalidPacketSize(f"packet {m} has {len(packet)} grids instead of expected {D}")
+			for k, grid in enumerate(packet):
+				if len(grid) != H:
+					raise InvalidPacketSize(f"grid {k} in packet {m} has {len(grid)} columns instead of expected {H}")
+				for j, row in enumerate(grid):
+					if len(row) != L:
+						raise InvalidPacketSize(f"row {j} in grid {k} in packet {m} has {len(row)} pixels instead of expected {L}")
 		
 	def advance_packet_plan(self, current_time):
 		is_ended = False
@@ -23,13 +38,13 @@ class PacketPlan:
 			is_advanced = True
 		
 			if self.is_repeating:
-				if self.current_index == len(self.packet_plan) - 1:
+				if self.current_index == len(self.packet_time_series) - 1:
 					self.current_index = 0
 				else:
 					self.current_index += 1
 					
 			else:
-				if self.current_index == len(self.packet_plan) - 1:
+				if self.current_index == len(self.packet_time_series) - 1:
 					is_ended = True
 				else:
 					self.current_index += 1
@@ -78,7 +93,7 @@ class BaseController:
 			if self.gui is not None:
 				self.gui.set_status('Active', self.name)
 			
-	def update_pixel_allocation(self, light_dimensions):
+	def update_pixel_allocation(self, light_dimensions, is_left_shared=False, is_right_shared=False):
 		raise NotImplementedError
 		# self.light_dimensions = light_dimensions
 		# self.run_lights(self.current_motion_colors, self.select_mode)

@@ -5,91 +5,120 @@ from time import sleep
 
 import global_vars
 from Interlude import Interlude
+from Lights import Lights
 
-TEST_MODE = False
+IS_UNIVERSE_PER_OUTPUT = False
 
 BASE_MOTION_DELAY_SECS = 0.05
 TIME_CHECK_TIMER_SECS = 5
 CONTROLLER_IP = "192.168.0.105"
 ACTIVITY_FILE = "/home/pi/interactive-lights/activity.txt"
 
-# real times
-if TEST_MODE:
-	START_TIME = time(0,0,0)
-	STOP_TIME = time(23,59,59)
-	MASTER_DIMMING = 0.85
-else:
-	START_TIME = time(16,0,0)
-	STOP_TIME = time(22,15,0)
-	MASTER_DIMMING = 0.3
 
 class LightSender:
 	def __init__(self, logger):
 		self.logger = logger
 		
+		self.is_test_mode = False
+		self.set_master_parameters()
+		
 		# setup the communication with the lights
 		self.sender = sacn.sACNsender()
 		self.sender.start()  # start the sending thread
-		self.sender.activate_output(1)
-		self.sender.activate_output(2)
-		self.sender.activate_output(3)
-		self.sender.activate_output(4)
-		self.sender.activate_output(5)
-		self.sender.activate_output(6)
-		self.sender.activate_output(7)
-		self.sender.activate_output(8)
-		self.sender.activate_output(9)
-		self.sender.activate_output(10)
-		self.universe_senders = [
-			self.sender[1],
-			self.sender[2],
-			self.sender[3],
-			self.sender[4],
-			self.sender[5],
-			self.sender[6],
-			self.sender[7],
-			self.sender[8],
-			self.sender[9],
-			self.sender[10]
-		]
+		self.universe_senders = []
+		self.universes = []
+
+		# pixel indexes are stored as left/right, up/down, forward/backward or pixel, row, grid
+		for i in range(1,11):
+			self.sender.activate_output(i)
+			self.universe_senders.append(self.sender[i])
+				
+		if IS_UNIVERSE_PER_OUTPUT:
+			self.light_dimensions = L, H, D = 20, 10, 5	# L, H, D
+				
+			for d, sender in enumerate(self.universe_senders):
+				if d < 5:
+					i = d
+					a = 0
+				else:
+					i = d - 5
+					a = 10
+					
+				d = {
+					"universe": sender,
+					"pixel_indexes": [(a+0, x, i) for x in range(10)] +
+						[(a+1, x, i) for x in range(9, -1, -1)] +
+						[(a+2, x, i) for x in range(10)] +
+						[(a+3, x, i) for x in range(9, -1, -1)] +
+						[(a+4, x, i) for x in range(10)] +
+						[(a+5, x, i) for x in range(9, -1, -1)] +
+						[(a+6, x, i) for x in range(10)] +
+						[(a+7, x, i) for x in range(9, -1, -1)] +
+						[(a+8, x, i) for x in range(10)] +
+						[(a+9, x, i) for x in range(9, -1, -1)]
+				}
+				self.universes.append(d)
+		else:
+			self.light_dimensions = L, H, D = 30, 10, 5	# L, H, D
+				
+			for d, sender in enumerate(self.universe_senders):
+				i = int(d / 2)
+				if d % 2 == 0:
+					a = 0
+					d = {
+						"universe": sender,
+						"pixel_indexes": [(a+0, x, i) for x in range(10)] +
+							[(a+1, x, i) for x in range(9, -1, -1)] +
+							[(a+2, x, i) for x in range(10)] +
+							[(a+3, x, i) for x in range(9, -1, -1)] +
+							[(a+4, x, i) for x in range(10)] +
+							[(a+5, x, i) for x in range(9, -1, -1)] +
+							[(a+6, x, i) for x in range(10)] +
+							[(a+7, x, i) for x in range(9, -1, -1)] +
+							[(a+8, x, i) for x in range(10)] +
+							[(a+9, x, i) for x in range(9, -1, -1)] +
+							[(a+10, x, i) for x in range(10)] +
+							[(a+11, x, i) for x in range(9, -1, -1)] +
+							[(a+12, x, i) for x in range(10)] +
+							[(a+13, x, i) for x in range(9, -1, -1)] +
+							[(a+14, x, i) for x in range(10)] +
+							[(a+15, x, i) for x in range(9, -1, -1)] +
+							[(a+16, x, i) for x in range(10)]
+					}
+
+				else:
+					a = 17
+					d = {
+						"universe": sender,
+						"pixel_indexes": [(a+0, x, i) for x in range(9, -1, -1)] +
+							[(a+1, x, i) for x in range(10)] +
+							[(a+2, x, i) for x in range(9, -1, -1)] +
+							[(a+3, x, i) for x in range(10)] +
+							[(a+4, x, i) for x in range(9, -1, -1)] +
+							[(a+5, x, i) for x in range(10)] +
+							[(a+6, x, i) for x in range(9, -1, -1)] +
+							[(a+7, x, i) for x in range(10)] +
+							[(a+8, x, i) for x in range(9, -1, -1)] +
+							[(a+9, x, i) for x in range(10)] +
+							[(a+10, x, i) for x in range(9, -1, -1)] +
+							[(a+11, x, i) for x in range(10)] +
+							[(a+12, x, i) for x in range(9, -1, -1)]
+					}
+				self.universes.append(d)
+			
 		for x in self.universe_senders:
 			x.destination = CONTROLLER_IP
+			
+		# print(self.universes)
 		
 		self.t = None  # thread for handling motion
 		self.time_thread = threading.Timer(TIME_CHECK_TIMER_SECS, self.time_check).start()
 		self.is_active = self.time_check()
 		
 		# set up the light matrix mapping
-		self.light_dimensions = L, H, D = 20, 10, 5	# L, H, D
-		self.blackout_packet = self.make_blackout_packet()
-		self.current_packet = self.make_blackout_packet()
+		self.blackout_packet = Lights.make_blackout_packet(self.light_dimensions)
+		self.current_packet = Lights.make_blackout_packet(self.light_dimensions)
 		
-		# pixel indexes are stored as left/right, up/down, forward/backward or pixel, row, grid
-		
-		self.universes = []
-		for d, sender in enumerate(self.universe_senders):
-			if d < 5:
-				i = d
-				a = 0
-			else:
-				i = d - 5
-				a = 10
-				
-			d = {
-				"universe": sender,
-				"pixel_indexes": [(a+0, x, i) for x in range(10)] +
-					[(a+1, x, i) for x in range(9, -1, -1)] +
-					[(a+2, x, i) for x in range(10)] +
-					[(a+3, x, i) for x in range(9, -1, -1)] +
-					[(a+4, x, i) for x in range(10)] +
-					[(a+5, x, i) for x in range(9, -1, -1)] +
-					[(a+6, x, i) for x in range(10)] +
-					[(a+7, x, i) for x in range(9, -1, -1)] +
-					[(a+8, x, i) for x in range(10)] +
-					[(a+9, x, i) for x in range(9, -1, -1)]
-			}
-			self.universes.append(d)
-			
 		self.write_log_entry('SYSTEM', 'active')
 
 		# initiate the interlude sequence across the full display
@@ -98,14 +127,25 @@ class LightSender:
 		self.allocate_pixels()
 		
 		self.next_moving_step()
-	
-	def make_blackout_packet(self):
-		L, H, D = self.light_dimensions
-		return [[[(0, 0, 0) for i in range(L)] for j in range(H)] for k in range(D)]
+		
+	def toggle_test_mode(self):
+		self.is_test_mode = not self.is_test_mode
+		self.set_master_parameters()
+		self.logger.info(f'Test Mode = {self.is_test_mode}')
+		
+	def set_master_parameters(self):
+		if self.is_test_mode:
+			self.start_time = time(0,0,0)
+			self.stop_time = time(23,59,59)
+			self.master_dimming = 1
+		else:
+			self.start_time = time(16,0,0)
+			self.stop_time = time(22,15,0)
+			self.master_dimming = 0.5
 	
 	def time_check(self):
 		now = datetime.now().time()
-		if START_TIME <= now < STOP_TIME:
+		if self.start_time <= now < self.stop_time:
 			self.is_active = True
 		else:
 			self.is_active = False
@@ -168,7 +208,7 @@ class LightSender:
 				uni_packet = []
 				for pixel in uni['pixel_indexes']:
 					p, r, g = pixel
-					uni_packet += [int(MASTER_DIMMING * x) for x in packet[g][r][p]]
+					uni_packet += [int(self.master_dimming * x) for x in packet[g][r][p]]
 				
 				# print(uni_packet)
 				uni['universe'].dmx_data = uni_packet
@@ -258,11 +298,20 @@ class LightSender:
 			
 			range_index = 0
 			for key, value in sorted(self.controllers.items(), key=lambda x: x[1]['index']):
+				shared_left = shared_right = False
 				if value["is_active"]:
+					if range_index > 0:
+						shared_left = True
+					if len(pixel_ranges) > 1 and range_index < len(pixel_ranges) - 1:
+						shared_right = True
 					range_L, range_H, range_D = pixel_ranges[range_index]
 					
 					value["pixel_allocation"] = range_L, range_H, range_D
-					value["controller"].update_pixel_allocation((range_L[1] - range_L[0] + 1, range_H[1] - range_H[0] + 1, range_D[1] - range_D[0] + 1))
+					value["controller"].update_pixel_allocation(
+						light_dimensions = (range_L[1] - range_L[0] + 1, range_H[1] - range_H[0] + 1, range_D[1] - range_D[0] + 1),
+						is_left_shared=shared_left,
+						is_right_shared=shared_right
+					)
 					range_index += 1
 				else:
 					value["pixel_allocation"] = None

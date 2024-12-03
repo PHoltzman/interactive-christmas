@@ -16,7 +16,7 @@ class Car(BaseController):
 		self.macro_mode = 0
 		self.select_mode = 0
 		self.segment_size = 1
-		self.current_colors = ['green', 'black']
+		self.current_colors = ['green', 'red']
 
 		self.current_wheel_value = 0
 		self.current_gas_value = 0
@@ -42,7 +42,7 @@ class Car(BaseController):
 		
 		self.logger.info(f'Car Macro Mode = {self.macro_mode}')
 			
-	def update_pixel_allocation(self, light_dimensions):
+	def update_pixel_allocation(self, light_dimensions, **kwargs):
 		self.light_dimensions = light_dimensions
 		L, H, D = light_dimensions
 		if L == 0 or H == 0 or D == 0:
@@ -56,12 +56,12 @@ class Car(BaseController):
 			
 	def check_for_inactivity(self):
 		if self.is_active:
-			if (datetime.now() - self.last_input_datetime).total_seconds() > 15:
+			if (datetime.now() - self.last_input_datetime).total_seconds() > 25:
 				# this controller is now inactive so do stuff accordingly
 				self.is_active = False
 				self.macro_mode = 0
 				self.select_mode = 0
-				self.current_colors = ['green', 'black']
+				self.current_colors = ['green', 'red']
 				self.current_paddle_value = 0
 				self.paddle_direction, self.paddle_time_delay = self.calculate_paddle_time_delay(self.current_paddle_value)
 				self.paddle_click_direction = None
@@ -84,7 +84,6 @@ class Car(BaseController):
 		color = self.get_friendly_button_name(button)
 		self.logger.info(f"{color} release")
 		
-		packet_plan = []
 		if color == 'up_left':	
 			# for macro_mode 1, change the number of enemies
 			if self.macro_mode == 1 and self.chase_game is not None:
@@ -114,9 +113,7 @@ class Car(BaseController):
 				
 				self.main_packet_plan = self.make_packet_plan()
 				self.update_lights()
-				
-			# TODO (maybe): for snake game, also toggle wall density...though game is hard enough without walls it seems
-											
+															
 		elif color == 'down_left':
 			if self.macro_mode == 0:
 				# change the mode between alternating and blocks
@@ -143,7 +140,7 @@ class Car(BaseController):
 			# 0 = lights, 1 = chase game, 2 = snake game
 			self.macro_mode = 0 if self.macro_mode == 2 else self.macro_mode + 1
 			self.logger.info(f'Car Macro Mode = {self.macro_mode}')
-			self.main_packet_plan = self.make_packet_plan()
+			self.main_packet_plan = self.make_packet_plan(include_intro_screen=True)
 			self.light_sender.write_log_entry(self.name, f"mode_{self.macro_mode}_active")
 			self.update_lights()
 			
@@ -172,7 +169,7 @@ class Car(BaseController):
 					if self.snake_game is not None:
 						self.snake_game.set_direction(self.paddle_click_direction)
 			
-	def make_packet_plan(self, starting_snake_length=None):
+	def make_packet_plan(self, starting_snake_length=None, include_intro_screen=False):
 		L, H, D = self.light_dimensions
 		packets = []
 		
@@ -182,16 +179,11 @@ class Car(BaseController):
 				# blocks
 				packet = Lights.get_blocks_packet(colors_rgb, self.light_dimensions)
 				packets.append(packet)
-				# for i in range(L):
-					# packets.append(Lights.shift_packet(packet, i, right=True))
 					
 			elif self.select_mode == 1:
 				# alternating
 				packet = Lights.get_alternating_packet(colors_rgb, self.light_dimensions, self.segment_size)
 				packets.append(packet)
-				# for i in range(len(colors_rgb)):
-					# for j in range(self.segment_size):
-						# packets.append(Lights.shift_packet(packet, i * self.segment_size + j + 1, right=True))
 		
 		elif self.macro_mode == 1:
 			# chase game
@@ -207,10 +199,11 @@ class Car(BaseController):
 		elif self.macro_mode == 2:
 			# snake game
 			if self.snake_game is not None:
-				self.snake_game = SnakeGame.create_new(self.snake_game, self.light_dimensions)
+				self.snake_game = SnakeGame.create_new(existing=self.snake_game, light_dimensions=self.light_dimensions)
 			else:
-				self.snake_game = SnakeGame(self.logger, self.light_dimensions, self.light_sender, gui=self.gui)
-			self.snake_game.make_new_game(starting_snake_length=starting_snake_length)
+				self.snake_game = SnakeGame(logger=self.logger, light_dimensions=self.light_dimensions, light_sender=self.light_sender, gui=self.gui)
+			intro_packet_plans = self.snake_game.make_new_game(starting_snake_length=starting_snake_length, include_intro_screen=include_intro_screen)
+			self.temp_packet_plans += intro_packet_plans
 			packets.append(self.snake_game.draw_game_board())
 			
 		return PacketPlan(packets)
@@ -243,7 +236,7 @@ class Car(BaseController):
 						self.snake_game.set_direction(self.wheel_direction)
 			
 		elif device == 'brake':
-			normalized_brake_value = round(value, 2)  # normalizes brake value to range of 0 (off) to 1 (on) with 2 decimal precision
+			normalized_brake_value = round(value, 1)  # normalizes brake value to range of 0 (off) to 1 (on) with 2 decimal precision
 			if normalized_brake_value != self.current_brake_value:
 				# this means the pedal position has changed so we need to process it
 				is_changed = True
@@ -265,6 +258,10 @@ class Car(BaseController):
 			packets_to_merge = [new_packet] + [x.get_current_packet() for x in self.temp_packet_plans]
 			try:
 				new_packet = Lights.merge_packets(packets_to_merge, self.light_dimensions)
+			except TypeError:
+				for item in self.temp_packet_plans:
+					print(len(item.packet_time_series))
+				raise
 			except IndexError:
 				self.logger.warning('Index error when merging packets, likely due to light dimensions being reallocated. Skipping merge and using main packet instead and expecting it to fix itself next time around')
 		
@@ -356,7 +353,7 @@ class Car(BaseController):
 				self.paddle_click_direction = None
 			
 			# for chase game, we always need to call out because there might be enemy movement even if no controller input
-			packet, pulse_plan = self.chase_game.next_moving_step(
+			packet, pulse_plans = self.chase_game.next_moving_step(
 				current_time, 
 				left=left, 
 				right=right,
@@ -364,9 +361,7 @@ class Car(BaseController):
 				backward=backward,
 				desired_height=desired_height
 			)
-					
-			if pulse_plan is not None:
-				self.temp_packet_plans.append(pulse_plan)
+			self.temp_packet_plans += pulse_plans
 			
 			if packet is not None:
 				self.main_packet_plan = PacketPlan([packet])
@@ -375,13 +370,16 @@ class Car(BaseController):
 				
 		elif self.macro_mode == 2 and self.snake_game is not None:
 			# for snake game, just call out to the game and let it decide what to do since all direction input is asynchronously set
-			packet, pulse_plan = self.snake_game.next_moving_step(current_time)
-			if pulse_plan is not None:
-				self.temp_packet_plans.append(pulse_plan)
+			packet, pulse_plans = self.snake_game.next_moving_step(current_time)
+			self.temp_packet_plans += pulse_plans
 			
 			if packet is not None:
+				# if a None packet is returned, then just keep reusing the existing packet
 				self.main_packet_plan = PacketPlan([packet])
 				self.main_packet_plan.last_motion_step_time = current_time
+				changed = True
+			
+			if changed:
 				self.update_lights()
 	
 	@staticmethod

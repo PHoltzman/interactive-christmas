@@ -16,6 +16,8 @@ class Guitar(BaseController):
 		self.motion_direction_list = ['right', 'up', 'forward', 'left', 'down', 'backward']
 		self.motion_direction_index = 0
 		
+		self.test_mode_button_history = []
+		
 		self.current_colors = []
 		self.current_motion_colors = []
 		self.main_packet_plan = PacketPlan([Lights.make_whole_string_packet((0, 0, 0), self.light_dimensions)])
@@ -31,7 +33,7 @@ class Guitar(BaseController):
 				self.main_packet_plan.time_delay = self.get_time_delay_from_selector_position(self.selector_position)
 			axis.when_moved = self.on_axis_moved
 			
-	def update_pixel_allocation(self, light_dimensions):
+	def update_pixel_allocation(self, light_dimensions, **kwargs):
 		self.light_dimensions = light_dimensions
 		self.run_lights(self.current_motion_colors, self.select_mode)
 			
@@ -65,6 +67,11 @@ class Guitar(BaseController):
 		if color in self.current_colors:
 			self.current_colors.remove(color)
 		self.logger.info(f"{color} release")
+		
+		self.test_mode_button_history.append(color)
+		self.test_mode_button_history = self.test_mode_button_history[-5:]
+		if self.test_mode_button_history == ["start", "red", "yellow", "blue", "start"]:
+			self.light_sender.toggle_test_mode()
 		
 		if color == 'select':
 			# set the select mode if necessary
@@ -147,12 +154,12 @@ class Guitar(BaseController):
 				elif mode == 4:
 					# the lights wipe on and off, in color blocks like in mode 0
 					packet = Lights.get_blocks_packet(colors_rgb, self.light_dimensions)
-					packets = Lights.make_wipe_plan(packet, motion_dirs[0])
+					packets = Lights.make_wipe_time_series(packet, motion_dirs[0])
 				
 				elif mode == 5:
 					# the lights wipe on and off, alternating like in mode 1
 					packet = Lights.get_alternating_packet(colors_rgb, self.light_dimensions)
-					packets = Lights.make_wipe_plan(packet, motion_dirs[0])
+					packets = Lights.make_wipe_time_series(packet, motion_dirs[0])
 						
 				packet_plan = PacketPlan(packets, is_repeating=True, time_delay=self.get_time_delay_from_selector_position(self.selector_position))
 			

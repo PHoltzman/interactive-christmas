@@ -85,17 +85,17 @@ class MazeGame():
 
 			# if hit boundary, pulse red and start the game over by making a new board
 			if hit_boundary:
-				pulse_plan = PacketPlan(Lights.make_pulse_packet_plan(Lights.rgb_from_color('red'), self.light_dimensions, frames=6), time_delay=0.05)
+				pulse_plan = PacketPlan(Lights.make_pulse_packet_time_series(Lights.rgb_from_color('red'), self.light_dimensions, frames=6), time_delay=0.05)
 				self.make_new_game()
 				
 			# if hit snake, pulse orange and start the game over by making a new board
 			elif hit_self:
-				pulse_plan = PacketPlan(Lights.make_pulse_packet_plan(Lights.rgb_from_color('orange'), self.light_dimensions, frames=6), time_delay=0.05)
+				pulse_plan = PacketPlan(Lights.make_pulse_packet_time_series(Lights.rgb_from_color('orange'), self.light_dimensions, frames=6), time_delay=0.05)
 				self.make_new_game()
 			
 			# if caught the next bite, quick pulse green and make a new target
 			elif hit_target:
-				pulse_plan = PacketPlan(Lights.make_pulse_packet_plan(Lights.rgb_from_color('green'), self.light_dimensions, frames=3), time_delay=0.05)
+				pulse_plan = PacketPlan(Lights.make_pulse_packet_time_series(Lights.rgb_from_color('green'), self.light_dimensions, frames=3), time_delay=0.05)
 				self.target = self.make_target()
 			
 		# draw the board

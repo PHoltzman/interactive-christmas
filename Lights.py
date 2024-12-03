@@ -7,6 +7,12 @@ class Lights:
 	# packet plan is a 4 dimensional array
 	# Time array around LxWxD around LxW around L
 	# row, grid, packet, packet_plan
+	# origin is front bottom left corner
+	
+	@staticmethod
+	def make_blackout_packet(light_dimensions):
+		L, H, D = light_dimensions
+		return [[[(0, 0, 0) for i in range(L)] for j in range(H)] for k in range(D)]
 	
 	@staticmethod
 	def rgb_from_color(color_name):
@@ -73,7 +79,7 @@ class Lights:
 		return colors
 			
 	@staticmethod
-	def make_wipe_plan(packet, direction):
+	def make_wipe_time_series(packet, direction):
 		# get packet dimensions
 		D = len(packet)
 		H = len(packet[0])
@@ -365,17 +371,19 @@ class Lights:
 		return packet
 		
 	@staticmethod
-	def make_pulse_packet_plan(color_rgb, light_dimensions, frames=11):
-		base_plan = [Lights.make_whole_string_packet(color_rgb, light_dimensions) for x in range(frames)]
+	def make_pulse_packet_time_series(light_dimensions, packet=None, color_rgb=None, frames=11):
+		if packet is None:
+			packet = Lights.make_whole_string_packet(color_rgb, light_dimensions)
+		base_time_series = [packet for x in range(frames)]
 		pulse_levels = [1 - (1 / frames) * x for x in range(frames)]
-		pulse_plan = [Lights.make_scale_packet(x, light_dimensions) for x in pulse_levels]
-		packet_plan = Lights.apply_dim_plan(base_plan, pulse_plan)
+		pulse_time_series = [Lights.make_scale_packet(x, light_dimensions) for x in pulse_levels]
+		packet_time_series = Lights.apply_dim_time_series(base_time_series, pulse_time_series)
 		
-		return packet_plan
+		return packet_time_series
 		
 	@staticmethod
-	def make_meteor_packet_plan(color_rgb, light_dimensions, start_pixel, frames=8, pulse_size=None):
-		base_plan = [Lights.make_whole_string_packet(color_rgb, light_dimensions) for _ in range(frames)]
+	def make_meteor_packet_time_series(color_rgb, light_dimensions, start_pixel, frames=8, pulse_size=None):
+		base_time_series = [Lights.make_whole_string_packet(color_rgb, light_dimensions) for _ in range(frames)]
 		L, H, D = L1, H1, D1 = light_dimensions
 		left = right = up = down = forward = backward = False
 		
@@ -412,10 +420,11 @@ class Lights:
 			H1 = max(y-0, H-1-y)
 			D1 = max(z-0, D-1-z)
 			left = right = up = down = forward = backward = True
-			
+		
+		# make a packet of all zeros
 		base_wipe_packet = Lights.make_scale_packet(0, light_dimensions)
 		
-		wipe_plan = []
+		wipe_time_series = []
 		for f in range(frames):
 			# print(f"f = {f}")
 			L_step = int(f * L1 / frames) + 1
@@ -465,17 +474,17 @@ class Lights:
 										print("IndexError: ", dv, hv, lv)
 										# raise
 						
-			wipe_plan.append(packet)
+			wipe_time_series.append(packet)
 			
-		packet_plan = Lights.apply_dim_plan(base_plan, wipe_plan)
+		packet_time_series = Lights.apply_dim_time_series(base_time_series, wipe_time_series)
 		
-		return packet_plan
+		return packet_time_series
 		
 	@staticmethod
-	def apply_dim_plan(packet_plan, dim_plan):
-		final_plan = []
-		for i, packet in enumerate(packet_plan):
-			dim_packet = dim_plan[i]
+	def apply_dim_time_series(packet_time_series, dim_time_series):
+		final_time_series = []
+		for i, packet in enumerate(packet_time_series):
+			dim_packet = dim_time_series[i]
 			final_packet = []
 			for j, grid in enumerate(packet):
 				dim_grid = dim_packet[j]
@@ -485,9 +494,9 @@ class Lights:
 					final_row = [(int(a[0]*b), int(a[1]*b), int(a[2]*b)) for a,b in zip(row, dim_row)]
 					final_grid.append(final_row)
 				final_packet.append(final_grid)
-			final_plan.append(final_packet)
+			final_time_series.append(final_packet)
 					
-		return final_plan
+		return final_time_series
 		
 	@staticmethod
 	def merge_packets(packets, light_dimensions):
@@ -500,10 +509,16 @@ class Lights:
 				row = []
 				for k in range(L):
 					pixels = [packet[i][j][k] for packet in packets]
-					r = min(sum([x[0] for x in pixels]), 255)
-					g = min(sum([x[1] for x in pixels]), 255)
-					b = min(sum([x[2] for x in pixels]), 255)
-					row.append((r,g,b))
+					try:
+						r = min(sum([x[0] for x in pixels]), 255)
+						g = min(sum([x[1] for x in pixels]), 255)
+						b = min(sum([x[2] for x in pixels]), 255)
+						row.append((r,g,b))
+					except TypeError:
+						print(pixels)
+						for packet in packets:
+							print(packet[0])
+						raise
 				grid.append(row)
 			new_packet.append(grid)
 			
@@ -518,7 +533,7 @@ class Lights:
 		return packet
 		
 	@staticmethod
-	def make_interlude_packet_plan(light_dimensions):
+	def make_interlude_packet_time_series(light_dimensions):
 		# rainbow blocks scrolling one direction at 10% dimming
 		# a full brightness hot spot scrolling the other direction at a different speed
 		# 3x around for dimming while only 1x around for rainbow
@@ -533,7 +548,7 @@ class Lights:
 			packet.append(grid)
 		
 		# make the full packet_plan at full brightness
-		packet_plan = []
+		packet_time_series = []
 		for i in range(L):
 			new_packet = []
 			for grid in packet:
@@ -542,9 +557,9 @@ class Lights:
 					new_row = Lights.shift_packet([[row]], i, left=True)[0][0]
 					new_grid.append(new_row)
 				new_packet.append(new_grid)
-			packet_plan.append(new_packet)
-			packet_plan.append(new_packet)
-			packet_plan.append(new_packet)
+			packet_time_series.append(new_packet)
+			packet_time_series.append(new_packet)
+			packet_time_series.append(new_packet)
 				
 		# make the base dimming packet
 		dim_packet = []
@@ -560,8 +575,8 @@ class Lights:
 			dim_packet.append(dim_grid)
 					
 		# propagate the dim_packet for every timestep
-		dim_plan = []
-		for i in range(len(packet_plan)):
+		dim_time_series = []
+		for i in range(len(packet_time_series)):
 			new_dim_packet = []
 			for dim_grid in dim_packet:
 				new_dim_grid = []
@@ -569,12 +584,63 @@ class Lights:
 					new_dim_row = Lights.shift_packet([[dim_row]], i, right=True)[0][0]
 					new_dim_grid.append(new_dim_row)
 				new_dim_packet.append(new_dim_grid)
-			dim_plan.append(new_dim_packet)
+			dim_time_series.append(new_dim_packet)
 		
 		# multiply the packet_plan by the dim_plan to get the final result
-		final_plan = Lights.apply_dim_plan(packet_plan, dim_plan)
+		final_time_series = Lights.apply_dim_time_series(packet_time_series, dim_time_series)
+		
+		# add in a text overlay on the interlude front grid
+		overlay_grid = [[] for h in range(H)]
+		if L == 10:
+			pass
+		elif L == 20:
+			# overlay the stacked "COME PLAY" message across the top
+			letters = ["c", " ", "o", " ", "m", " ", "e"]
+			letter_grids = [Lights.make_letter(letter, color="white") for letter in letters]
+			
+			for letter_grid in letter_grids:
+				for i, row in enumerate(letter_grid):
+					overlay_grid[i] += row
 					
-		return final_plan
+			letters = ["p", " ", "l", " ", "a", " ", "y"]
+			letter_grids = [Lights.make_letter(letter) for letter in letters]
+			
+			for letter_grid in letter_grids:
+				for i, row in enumerate(letter_grid):
+					overlay_grid[i+5] += row
+			
+		elif L == 30:				
+			# overlay stacked "COME PLAY" message with wide letters in red and green
+			letters = [" ", "p", "  ", "l", "   ", "a", "   ", "y"]
+			letter_grids = [Lights.make_letter(letter, width="wide", color="green") for letter in letters]
+			for letter_grid in letter_grids:
+				for i, row in enumerate(letter_grid):
+					overlay_grid[i] += row
+					
+			letters = [" ", "c", "  ", "o", "   ", "m", "   ", "e"]
+			letter_grids = [Lights.make_letter(letter, width="wide", color="red") for letter in letters]
+			for letter_grid in letter_grids:
+				for i, row in enumerate(letter_grid):
+					overlay_grid[i+5] += row
+			
+		if overlay_grid:
+			for packet in final_time_series:
+				# erase the first grid
+				for j, row in enumerate(packet[0]):
+					for i, pixel in enumerate(row):
+						packet[0][j][i] = (0, 0, 0)
+						
+				# add the overlay
+				for j, row in enumerate(overlay_grid):
+					for i, pixel in enumerate(row):
+						if pixel != (0, 0, 0):
+							try:
+								packet[0][j][i] = pixel
+							except Exception:
+								print(i, j)
+								raise
+		
+		return final_time_series
 		
 	@staticmethod
 	def make_scale_packet(scale_value, light_dimensions):
@@ -605,3 +671,570 @@ class Lights:
 			packet.append(grid)
 			
 		return packet
+		
+	@staticmethod
+	def make_number(number, width="narrow", color="white"):
+		rgb_tuple = Lights.rgb_from_color(color)
+		
+		# defined as they look
+		# when consuming, the rows are reversed automatically to account for
+		# origin being at bottom left instead of top left
+		
+		wide_number_dict = {
+			0: [
+				[1, 1, 1, 1],
+				[1, 0, 0, 1],
+				[1, 0, 0, 1],
+				[1, 0, 0, 1],
+				[1, 1, 1, 1]
+			],
+			1: [
+				[0, 1, 0, 0],
+				[1, 1, 0, 0],
+				[0, 1, 0, 0],
+				[0, 1, 0, 0],
+				[1, 1, 1, 0]
+			],
+			2: [
+				[1, 1, 1, 1],
+				[0, 0, 0, 1],
+				[1, 1, 1, 1],
+				[1, 0, 0, 0],
+				[1, 1, 1, 1]
+			],
+			3: [
+				[1, 1, 1, 1],
+				[0, 0, 0, 1],
+				[0, 1, 1, 1],
+				[0, 0, 0, 1],
+				[1, 1, 1, 1]
+			],
+			4: [
+				[1, 0, 0, 1],
+				[1, 0, 0, 1],
+				[1, 1, 1, 1],
+				[0, 0, 0, 1],
+				[0, 0, 0, 1]
+			],
+			5: [
+				[1, 1, 1, 1],
+				[1, 0, 0, 0],
+				[1, 1, 1, 1],
+				[0, 0, 0, 1],
+				[1, 1, 1, 1]
+			],
+			6: [
+				[1, 0, 0, 0],
+				[1, 0, 0, 0],
+				[1, 1, 1, 1],
+				[1, 0, 0, 1],
+				[1, 1, 1, 1]
+			],
+			7: [
+				[1, 1, 1, 1],
+				[0, 0, 0, 1],
+				[0, 0, 0, 1],
+				[0, 0, 0, 1],
+				[0, 0, 0, 1]
+			],
+			8: [
+				[1, 1, 1, 1],
+				[1, 0, 0, 1],
+				[1, 1, 1, 1],
+				[1, 0, 0, 1],
+				[1, 1, 1, 1]
+			],
+			9: [
+				[1, 1, 1, 1],
+				[1, 0, 0, 1],
+				[1, 1, 1, 1],
+				[0, 0, 0, 1],
+				[0, 0, 0, 1]
+			],
+		}
+		
+		narrow_number_dict = {
+			0: [
+				[1, 1, 1],
+				[1, 0, 1],
+				[1, 0, 1],
+				[1, 0, 1],
+				[1, 1, 1]
+			],
+			1: [
+				[0, 1, 0],
+				[1, 1, 0],
+				[0, 1, 0],
+				[0, 1, 0],
+				[1, 1, 1]
+			],
+			2: [
+				[1, 1, 1],
+				[0, 0, 1],
+				[1, 1, 1],
+				[1, 0, 0],
+				[1, 1, 1]
+			],
+			3: [
+				[1, 1, 1],
+				[0, 0, 1],
+				[1, 1, 1],
+				[0, 0, 1],
+				[1, 1, 1]
+			],
+			4: [
+				[1, 0, 1],
+				[1, 0, 1],
+				[1, 1, 1],
+				[0, 0, 1],
+				[0, 0, 1]
+			],
+			5: [
+				[1, 1, 1],
+				[1, 0, 0],
+				[1, 1, 1],
+				[0, 0, 1],
+				[1, 1, 1]
+			],
+			6: [
+				[1, 0, 0],
+				[1, 0, 0],
+				[1, 1, 1],
+				[1, 0, 1],
+				[1, 1, 1]
+			],
+			7: [
+				[1, 1, 1],
+				[0, 0, 1],
+				[0, 0, 1],
+				[0, 0, 1],
+				[0, 0, 1]
+			],
+			8: [
+				[1, 1, 1],
+				[1, 0, 1],
+				[1, 1, 1],
+				[1, 0, 1],
+				[1, 1, 1]
+			],
+			9: [
+				[1, 1, 1],
+				[1, 0, 1],
+				[1, 1, 1],
+				[0, 0, 1],
+				[0, 0, 1]
+			]
+		}
+		
+		if width == 'narrow':
+			item = narrow_number_dict[number]
+		elif width == 'wide':
+			item = wide_number_dict[number]
+			
+		return [[tuple(x*c for c in rgb_tuple) for x in row] for row in reversed(item)]
+	
+	@staticmethod
+	def make_letter(letter, width='narrow', color="white"):
+		rgb_tuple = Lights.rgb_from_color(color)
+		
+		space_array =  [
+			[0],
+			[0],
+			[0],
+			[0],
+			[0]
+		]
+		
+		# defined as they look
+		# when consuming, the rows are reversed automatically to account for
+		# origin being at bottom left instead of top left
+		wide_letter_dict = {
+			"a": [
+				[0, 0, 1, 0, 0],
+				[0, 1, 0, 1, 0],
+				[0, 1, 0, 1, 0],
+				[1, 1, 1, 1, 1],
+				[1, 0, 0, 0, 1]
+			],
+			"b": [
+				[1, 1, 1, 0, 0],
+				[1, 0, 0, 1, 0],
+				[1, 1, 1, 0, 0],
+				[1, 0, 0, 1, 0],
+				[1, 1, 1, 0, 0]
+			],
+			"c": [
+				[0, 1, 1, 1, 0],
+				[1, 0, 0, 0, 0],
+				[1, 0, 0, 0, 0],
+				[1, 0, 0, 0, 0],
+				[0, 1, 1, 1, 0]
+			],
+			"d": [
+				[1, 1, 1, 0, 0],
+				[1, 0, 0, 1, 0],
+				[1, 0, 0, 1, 0],
+				[1, 0, 0, 1, 0],
+				[1, 1, 1, 0, 0]
+			],
+			"e": [
+				[1, 1, 1, 1, 0],
+				[1, 0, 0, 0, 0],
+				[1, 1, 1, 0, 0],
+				[1, 0, 0, 0, 0],
+				[1, 1, 1, 1, 0]
+			],
+			"f": [
+				[1, 1, 1, 1, 0],
+				[1, 0, 0, 0, 0],
+				[1, 1, 1, 0, 0],
+				[1, 0, 0, 0, 0],
+				[1, 0, 0, 0, 0]
+			],
+			"g": [
+				[0, 1, 1, 1, 0],
+				[1, 0, 0, 0, 0],
+				[1, 0, 0, 1, 1],
+				[1, 0, 0, 0, 1],
+				[0, 1, 1, 1, 0]
+			],
+			"h": [
+				[1, 0, 0, 1, 0],
+				[1, 0, 0, 1, 0],
+				[1, 1, 1, 1, 0],
+				[1, 0, 0, 1, 0],
+				[1, 0, 0, 1, 0]
+			],
+			"i": [
+				[1, 1, 1, 1, 1],
+				[0, 0, 1, 0, 0],
+				[0, 0, 1, 0, 0],
+				[0, 0, 1, 0, 0],
+				[1, 1, 1, 1, 1]
+			],
+			"j": [
+				[0, 0, 0, 1, 0],
+				[0, 0, 0, 1, 0],
+				[0, 0, 0, 1, 0],
+				[1, 0, 0, 1, 0],
+				[0, 1, 1, 0, 0]
+			],
+			"k": [
+				[1, 0, 0, 1, 0],
+				[1, 0, 1, 0, 0],
+				[1, 1, 0, 0, 0],
+				[1, 0, 1, 0, 0],
+				[1, 0, 0, 1, 0]
+			],
+			"l": [
+				[1, 0, 0, 0, 0],
+				[1, 0, 0, 0, 0],
+				[1, 0, 0, 0, 0],
+				[1, 0, 0, 0, 0],
+				[1, 1, 1, 1, 0]
+			],
+			"m": [
+				[1, 0, 0, 0, 1],
+				[1, 1, 0, 1, 1],
+				[1, 0, 1, 0, 1],
+				[1, 0, 0, 0, 1],
+				[1, 0, 0, 0, 1]
+			],
+			"n": [
+				[1, 0, 0, 0, 1],
+				[1, 1, 0, 0, 1],
+				[1, 0, 1, 0, 1],
+				[1, 0, 0, 1, 1],
+				[1, 0, 0, 0, 1]
+			],
+			"o": [
+				[0, 1, 1, 1, 0],
+				[1, 0, 0, 0, 1],
+				[1, 0, 0, 0, 1],
+				[1, 0, 0, 0, 1],
+				[0, 1, 1, 1, 0]
+			],
+			"p": [
+				[1, 1, 1, 0, 0],
+				[1, 0, 0, 1, 0],
+				[1, 1, 1, 0, 0],
+				[1, 0, 0, 0, 0],
+				[1, 0, 0, 0, 0]
+			],
+			"q": [
+				[0, 1, 1, 0, 0],
+				[1, 0, 0, 1, 0],
+				[1, 0, 0, 1, 0],
+				[1, 0, 0, 1, 0],
+				[0, 1, 1, 0, 1]
+			],
+			"r": [
+				[1, 1, 1, 0, 0],
+				[1, 0, 0, 1, 0],
+				[1, 1, 1, 0, 0],
+				[1, 0, 0, 1, 0],
+				[1, 0, 0, 1, 0]
+			],
+			"s": [
+				[0, 1, 1, 1, 0],
+				[1, 0, 0, 0, 0],
+				[0, 1, 1, 0, 0],
+				[0, 0, 0, 1, 0],
+				[1, 1, 1, 0, 0]
+			],
+			"t": [
+				[1, 1, 1, 1, 1],
+				[0, 0, 1, 0, 0],
+				[0, 0, 1, 0, 0],
+				[0, 0, 1, 0, 0],
+				[0, 0, 1, 0, 0]
+			],
+			"u": [
+				[1, 0, 0, 1, 0],
+				[1, 0, 0, 1, 0],
+				[1, 0, 0, 1, 0],
+				[1, 0, 0, 1, 0],
+				[0, 1, 1, 0, 0]
+			],
+			"v": [
+				[1, 0, 0, 0, 1],
+				[1, 0, 0, 0, 1],
+				[0, 1, 0, 1, 0],
+				[0, 1, 0, 1, 0],
+				[0, 0, 1, 0, 0]
+			],
+			"w": [
+				[1, 0, 0, 0, 1],
+				[1, 0, 0, 0, 1],
+				[1, 0, 1, 0, 1],
+				[1, 1, 0, 1, 1],
+				[1, 0, 0, 0, 1]
+			],
+			"x": [
+				[1, 0, 0, 0, 1],
+				[0, 1, 0, 1, 0],
+				[0, 0, 1, 0, 0],
+				[0, 1, 0, 1, 0],
+				[1, 0, 0, 0, 1]
+			],
+			"y": [
+				[1, 0, 0, 0, 1],
+				[0, 1, 0, 1, 0],
+				[0, 0, 1, 0, 0],
+				[0, 0, 1, 0, 0],
+				[0, 0, 1, 0, 0]
+			],
+			"z": [
+				[1, 1, 1, 1, 1],
+				[0, 0, 0, 1, 0],
+				[0, 0, 1, 0, 0],
+				[0, 1, 0, 0, 0],
+				[1, 1, 1, 1, 1]
+			]
+		}
+		narrow_letter_dict = {
+			"a": [
+				[0, 1, 0],
+				[1, 0, 1],
+				[1, 1, 1],
+				[1, 0, 1],
+				[1, 0, 1]
+			],
+			"b": [
+				[1, 1, 0],
+				[1, 0, 1],
+				[1, 1, 0],
+				[1, 0, 1],
+				[1, 1, 0]
+			],
+			"c": [
+				[0, 1, 1],
+				[1, 0, 0],
+				[1, 0, 0],
+				[1, 0, 0],
+				[0, 1, 1]
+			],
+			"d": [
+				[1, 1, 0],
+				[1, 0, 1],
+				[1, 0, 1],
+				[1, 0, 1],
+				[1, 1, 0]
+			],
+			"e": [
+				[1, 1, 1],
+				[1, 0, 0],
+				[1, 1, 0],
+				[1, 0, 0],
+				[1, 1, 1]
+			],
+			"f": [
+				[1, 1, 1],
+				[1, 0, 0],
+				[1, 1, 0],
+				[1, 0, 0],
+				[1, 0, 0]
+			],
+			"g": [
+				[0, 1, 1],
+				[1, 0, 0],
+				[1, 0, 0],
+				[1, 0, 1],
+				[0, 1, 1]
+			],
+			"h": [
+				[1, 0, 1],
+				[1, 0, 1],
+				[1, 1, 1],
+				[1, 0, 1],
+				[1, 0, 1]
+			],
+			"i": [
+				[1, 1, 1],
+				[0, 1, 0],
+				[0, 1, 0],
+				[0, 1, 0],
+				[1, 1, 1]
+			],
+			"j": [
+				[0, 0, 1],
+				[0, 0, 1],
+				[0, 0, 1],
+				[1, 0, 1],
+				[0, 1, 0]
+			],
+			"k": [
+				[1, 0, 1],
+				[1, 0, 1],
+				[1, 1, 0],
+				[1, 0, 1],
+				[1, 0, 1]
+			],
+			"l": [
+				[1, 0, 0],
+				[1, 0, 0],
+				[1, 0, 0],
+				[1, 0, 0],
+				[1, 1, 1]
+			],
+			"m": [
+				[1, 0, 1],
+				[1, 1, 1],
+				[1, 0, 1],
+				[1, 0, 1],
+				[1, 0, 1]
+			],
+			"n": [
+				[1, 0, 1],
+				[1, 1, 1],
+				[1, 1, 1],
+				[1, 1, 1],
+				[1, 0, 1]
+			],
+			"o": [
+				[0, 1, 0],
+				[1, 0, 1],
+				[1, 0, 1],
+				[1, 0, 1],
+				[0, 1, 0]
+			],
+			"p": [
+				[1, 1, 0],
+				[1, 0, 1],
+				[1, 1, 0],
+				[1, 0, 0],
+				[1, 0, 0]
+			],
+			"q": [
+				[0, 1, 0],
+				[1, 0, 1],
+				[1, 0, 1],
+				[1, 0, 1],
+				[0, 1, 1]
+			],
+			"r": [
+				[1, 1, 0],
+				[1, 0, 1],
+				[1, 1, 0],
+				[1, 0, 1],
+				[1, 0, 1]
+			],
+			"s": [
+				[0, 1, 1],
+				[1, 0, 0],
+				[0, 1, 0],
+				[0, 0, 1],
+				[1, 1, 0]
+			],
+			"t": [
+				[1, 1, 1],
+				[0, 1, 0],
+				[0, 1, 0],
+				[0, 1, 0],
+				[0, 1, 0]
+			],
+			"u": [
+				[1, 0, 1],
+				[1, 0, 1],
+				[1, 0, 1],
+				[1, 0, 1],
+				[1, 1, 1]
+			],
+			"v": [
+				[1, 0, 1],
+				[1, 0, 1],
+				[1, 0, 1],
+				[1, 0, 1],
+				[0, 1, 0]
+			],
+			"w": [
+				[1, 0, 1],
+				[1, 0, 1],
+				[1, 0, 1],
+				[1, 1, 1],
+				[1, 0, 1]
+			],
+			"x": [
+				[1, 0, 1],
+				[1, 0, 1],
+				[0, 1, 0],
+				[1, 0, 1],
+				[1, 0, 1]
+			],
+			"y": [
+				[1, 0, 1],
+				[1, 0, 1],
+				[0, 1, 0],
+				[0, 1, 0],
+				[0, 1, 0]
+			],
+			"z": [
+				[1, 1, 1],
+				[0, 0, 1],
+				[0, 1, 0],
+				[1, 0, 0],
+				[1, 1, 1]
+			]
+		}
+		
+		if letter.strip() == '':
+			# we just have one or more spaces
+			num_spaces = len(letter)
+			item = [num_spaces * x for x in space_array]
+		
+		else:
+			if width == 'narrow':
+				item = narrow_letter_dict[letter.lower()]
+			elif width == 'wide':
+				item = wide_letter_dict[letter.lower()]
+			
+			
+		return [[tuple(x*c for c in rgb_tuple) for x in row] for row in reversed(item)]
+		
+	def get_cols_used_for_number(num_digits, width="narrow", inter_spaces=1):
+		cols_per_digit = 3 if width == "narrow" else 4
+		total = num_digits * cols_per_digit + (num_digits - 1) * inter_spaces
+		
+		return total
+			
+		

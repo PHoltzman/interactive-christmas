@@ -12,9 +12,9 @@ class Drums(BaseController):
 		
 		self.time_delay = 0.05
 		
-		self.mode = 1  # 0 = pulse boxes, 1 = pulse wipe spread from corners
+		self.mode = 0  # 0 = pulse wipe spread from corners, 1 = boxes, 2 = vertical, 3 = horizontal, 4 = depthal
 
-		# for mode 0
+		# for modes != 0
 		self.color_masks = {
 			"red": [[[]]],
 			"yellow": [[[]]],
@@ -28,9 +28,9 @@ class Drums(BaseController):
 		
 		self.current_packet_plans = []
 			
-	def update_pixel_allocation(self, light_dimensions):
+	def update_pixel_allocation(self, light_dimensions, **kwargs):
 		self.light_dimensions = L, H, D = light_dimensions
-		self.create_box_allocation_and_masks()
+		self.create_allocation_and_masks(mode=self.mode)
 		self.create_spread_starting_point()
 	
 	def create_spread_starting_point(self):
@@ -59,18 +59,46 @@ class Drums(BaseController):
 			}
 		}
 
-	def create_box_allocation_and_masks(self):
+	def create_allocation_and_masks(self, mode=1):
 		L, H, D = self.light_dimensions
 		
 		# establish the location for each drum on the grid
-		L_split = int(L/2)
-		H_split = int(H/2)
-		red = (0, L_split), (0, H_split), (0, D)
-		yellow = (0, L_split), (H_split, H), (0, D)
-		green = (L_split, L), (0, H_split), (0, D)
-		blue = (L_split, L), (H_split, H), (0, D)	
-		orange = (int(L/4), int(L*3/4)), (int(H/4)+1, int(H*3/4)), (0, D)
-		
+		if mode == 0:  # meteors
+			return
+			
+		elif mode == 1:  # box
+			L_split = int(L/2)
+			H_split = int(H/2)
+			red = (0, L_split), (0, H_split), (0, D)
+			yellow = (0, L_split), (H_split, H), (0, D)
+			green = (L_split, L), (0, H_split), (0, D)
+			blue = (L_split, L), (H_split, H), (0, D)	
+			orange = (int(L/4), int(L*3/4)), (int(H/4)+1, int(H*3/4)), (0, D)
+			
+		elif mode == 2:  # vertical
+			L_split = int(L/5)
+			red = (0*L_split, 1*L_split), (0, H), (0, D)
+			yellow = (1*L_split, 2*L_split), (0, H), (0, D)
+			orange = (2*L_split, 3*L_split), (0, H), (0, D)
+			blue = (3*L_split, 4*L_split), (0, H), (0, D)
+			green = (4*L_split, 5*L_split), (0, H), (0, D)
+			
+		elif mode == 3:  # horizontal
+			H_split = int(H/5)
+			red = (0, L), (0*H_split, 1*H_split), (0, D)
+			yellow = (0, L), (1*H_split, 2*H_split), (0, D)
+			orange = (0, L), (2*H_split, 3*H_split), (0, D)
+			blue = (0, L), (3*H_split, 4*H_split), (0, D)
+			green = (0, L), (4*H_split, 5*H_split), (0, D)
+			
+		elif mode == 4:  # depthal
+			D_split = int(D/5)
+			red = (0, L), (0, H), (0*D_split, 1*D_split)
+			yellow = (0, L), (0, H), (1*D_split, 2*D_split)
+			orange = (0, L), (0, H), (2*D_split, 3*D_split)
+			blue = (0, L), (0, H), (3*D_split, 4*D_split)
+			green = (0, L), (0, H), (4*D_split, 5*D_split)
+			
 		self.color_masks = {
 			"red": self.make_light_mask(self.light_dimensions, red),
 			"yellow": self.make_light_mask(self.light_dimensions, yellow),
@@ -100,7 +128,7 @@ class Drums(BaseController):
 			if (datetime.now() - self.last_input_datetime).total_seconds() > 15:
 				# this controller is now inactive so do stuff accordingly
 				self.is_active = False
-				self.mode = 1
+				self.mode = 0
 								
 				# tell the rest of the system that they can release our pixels
 				self.light_sender.go_inactive(self.name)
@@ -118,35 +146,39 @@ class Drums(BaseController):
 			L, H, D = self.light_dimensions
 		
 			if self.mode == 0:
-				# Make the pulse plan and multiply by the appropriate dimming mask
-				packet_plan = Lights.make_pulse_packet_plan(
-					color_rgb=Lights.rgb_from_color(color),
-					light_dimensions=self.light_dimensions
-				)
-				packet_plan = Lights.apply_dim_plan(packet_plan, [self.color_masks[color]]*len(packet_plan))
-			
-				self.current_packet_plans.append(PacketPlan(packet_plan, time_delay=self.time_delay))
-				
-			elif self.mode == 1:
 				try:
 					for starting_point in self.color_spread_map[color]["starts"]:
-						packet_plan = Lights.make_meteor_packet_plan(
+						packet_time_series = Lights.make_meteor_packet_time_series(
 							color_rgb=Lights.rgb_from_color(color), 
 							light_dimensions=self.light_dimensions,
 							start_pixel=starting_point, 
-							pulse_size=self.color_spread_map[color]["pulse"]
+							pulse_size=self.color_spread_map[color]["pulse"],
+							frames=8
 						)
-						self.current_packet_plans.append(PacketPlan(packet_plan, time_delay=self.time_delay))
+						self.current_packet_plans.append(PacketPlan(packet_time_series, time_delay=self.time_delay))
 				except KeyError:
-					self.logger.error('Error finding color starting point for mode 1. Skipping for now and will try again next time')
+					self.logger.error('Error finding color starting point for mode 0. Skipping for now and will try again next time')
+				
+			else:
+				# Make the pulse plan and multiply by the appropriate dimming mask
+				packet_time_series = Lights.make_pulse_packet_time_series(
+					light_dimensions=self.light_dimensions,
+					color_rgb=Lights.rgb_from_color(color),
+					frames=4
+				)
+				packet_time_series = Lights.apply_dim_time_series(packet_time_series, [self.color_masks[color]]*len(packet_time_series))
+			
+				self.current_packet_plans.append(PacketPlan(packet_time_series, time_delay=self.time_delay))
 				
 		elif color == 'plus':
-			self.mode = 0 if self.mode == 1 else self.mode + 1
+			self.mode = 0 if self.mode == 4 else self.mode + 1
 			self.light_sender.write_log_entry(self.name, f"mode_{self.mode}_active")
+			self.create_allocation_and_masks(mode=self.mode)
 			
 		elif color == 'minus':
-			self.mode = 1 if self.mode == 0 else self.mode - 1
+			self.mode = 4 if self.mode == 0 else self.mode - 1
 			self.light_sender.write_log_entry(self.name, f"mode_{self.mode}_active")
+			self.create_allocation_and_masks(mode=self.mode)
 	
 	def update_lights(self):
 		# grab the current index for all active plans and merge those plans together

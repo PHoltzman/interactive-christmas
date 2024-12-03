@@ -2,6 +2,7 @@ import sched
 import threading
 from datetime import datetime, timedelta
 
+from BaseController import PacketPlan
 from Lights import Lights
 
 class Interlude:
@@ -12,34 +13,23 @@ class Interlude:
 		self.light_sender = light_sender
 		
 		self.is_active = False
-		self.last_motion_step_time = datetime.now()
 		
-		self.current_packet_plan = []
-		self.current_packet_plan_index = 0
-		self.time_delay = 0.25  # 0.05
+		self.main_packet_plan = self.make_main_packet_plan()
+		
+	def make_main_packet_plan(self):
+		return PacketPlan(
+			Lights.make_interlude_packet_time_series(self.light_dimensions),
+			is_repeating=True,
+			time_delay=0.25
+		)
 			
-	def update_pixel_allocation(self, light_dimensions):
+	def update_pixel_allocation(self, light_dimensions, **kwargs):
 		self.light_dimensions = light_dimensions
-		self.run_lights()
+		self.main_packet_plan = self.make_main_packet_plan()
+		self.light_sender.set_lights(self.name, self.main_packet_plan.get_current_packet())
 	
-	def run_lights(self):
-		self.current_packet_plan = Lights.make_interlude_packet_plan(self.light_dimensions)
-		self.current_packet_plan_index = 0
-		self.last_motion_step_time = datetime.now()
-				
-		# invoke light updater
-		self.light_sender.set_lights(self.name, self.current_packet_plan[self.current_packet_plan_index])
-		
 	def next_moving_step(self, current_time):
-		if (current_time - self.last_motion_step_time).total_seconds() >= self.time_delay:
-			# shift the sequence
-			if self.current_packet_plan_index == len(self.current_packet_plan) - 1:
-				self.current_packet_plan_index = 0
-			else:
-				self.current_packet_plan_index += 1
-			
-			new_packet = self.current_packet_plan[self.current_packet_plan_index]
-			self.last_motion_step_time = current_time
-				
+		is_advanced, is_ended = self.main_packet_plan.advance_packet_plan(current_time)
+		if is_advanced:	
 			# invoke light updater
-			self.light_sender.set_lights(self.name, new_packet)
+			self.light_sender.set_lights(self.name, self.main_packet_plan.get_current_packet())

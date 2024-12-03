@@ -64,7 +64,7 @@ class ChaseGame():
 		self.wall_density_divisor = self.wall_density_divisor_list[self.wall_density_divisor_index]
 		
 	def next_moving_step(self, current_time, left=None, right=None, forward=None, backward=None, desired_height=None):
-		pulse_plan = None
+		pulse_plans = []
 		if not self.is_3d:
 			forward=False
 			backward=False
@@ -81,16 +81,26 @@ class ChaseGame():
 				self.chase_pixel = (0,0,0)
 				self.make_new_game(chase_position=self.chase_pixel)
 				packet = self.draw_game_board()
-				pulse_plan = PacketPlan(Lights.make_pulse_packet_plan(Lights.rgb_from_color('red'), self.light_dimensions, frames=6), time_delay=0.05)
-				return packet, pulse_plan
+				pulse_plans.append(
+					PacketPlan(
+						Lights.make_pulse_packet_time_series(light_dimensions=self.light_dimensions, color_rgb=Lights.rgb_from_color('red'), frames=6),
+						time_delay=0.05
+					)
+				)
+				return packet, pulse_plans
 			
 			if reached_target:
 				# make a new game board but keep the chase pixel and the enemies in current locations
 				self.logger.info(f'Reached target at location: {self.chase_pixel}')
 				self.make_new_game(chase_position=self.chase_pixel, create_new_enemies=False)
 				packet = self.draw_game_board()
-				pulse_plan = PacketPlan(Lights.make_pulse_packet_plan(Lights.rgb_from_color('green'), self.light_dimensions, frames=6), time_delay=0.05)
-				return packet, pulse_plan
+				pulse_plans.append(
+					PacketPlan(
+						Lights.make_pulse_packet_time_series(light_dimensions=self.light_dimensions, color_rgb=Lights.rgb_from_color('green'), frames=6), 
+						time_delay=0.05
+					)
+				)
+				return packet, pulse_plans
 		
 		if (current_time - self.last_motion_step_time_enemy).total_seconds() >= self.enemy_time_delay:
 			self.last_motion_step_time_enemy = current_time
@@ -99,15 +109,20 @@ class ChaseGame():
 			for enemy in self.enemies:
 				if not any_hit_target:
 					# if an earlier one hit the target, then don't check the next ones, just keep them where they are
-					new_enemy, enemy_reached_target, enemy_hit_walls = self.move_enemy_pixel(enemy) 
+					new_enemy, enemy_reached_target, enemy_hit_walls = self.move_enemy_pixel(enemy, other_already_moved_enemies_locations=new_enemies) 
 					if enemy_reached_target:
 						# this means the enemy moved onto the chase pixel and we should flash red and make a new game board
 						any_hit_target = True
 						self.chase_pixel = (0,0,0)
 						self.make_new_game(chase_position=self.chase_pixel)
 						packet = self.draw_game_board()
-						pulse_plan = PacketPlan(Lights.make_pulse_packet_plan(Lights.rgb_from_color('red'), self.light_dimensions, frames=6), time_delay=0.05)
-						return packet, pulse_plan
+						pulse_plans.append(
+							PacketPlan(
+								Lights.make_pulse_packet_time_series(light_dimensions=self.light_dimensions, color_rgb=Lights.rgb_from_color('red'), frames=6), 
+								time_delay=0.05
+							)
+						)
+						return packet, pulse_plans
 					
 				else:
 					# just keep the enemy where it is as the starting point for next time since a different one hit the target
@@ -119,7 +134,7 @@ class ChaseGame():
 			self.enemies = new_enemies
 			
 		packet = self.draw_game_board()
-		return packet, pulse_plan
+		return packet, pulse_plans
 		
 	def make_new_game(self, chase_position=(0,0,0), create_new_enemies=True):
 		L, H, D = self.light_dimensions
@@ -183,7 +198,7 @@ class ChaseGame():
 		
 		return packet
 		
-	def move_enemy_pixel(self, enemy_pixel):
+	def move_enemy_pixel(self, enemy_pixel, other_already_moved_enemies_locations=[]):
 		# pick a direction to move based on where the chase pixel is and try it
 		# if the new location is not different than the current location, then try a different direction
 		# we are only moving one cardinal direction at a time so this should be simple
@@ -205,7 +220,7 @@ class ChaseGame():
 		
 		for step in movement_list:
 			new_location, reached_target, hit_wall, hit_enemy = self.move_pixel(enemy_pixel, self.chase_pixel, [], **{step[0]:True})
-			if new_location != enemy_pixel:
+			if new_location != enemy_pixel and new_location not in other_already_moved_enemies_locations:
 				# this means we actually moved successfully so can stop trying additional directions
 				return new_location, reached_target, hit_wall
 				

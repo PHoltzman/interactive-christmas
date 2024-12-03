@@ -8,13 +8,14 @@ Check out broomfieldlights.com for way more about my Christmas light show and re
 
 
 ## TODO list
-- Add virtual light display option for testing
-- Build MazeGame
-- Add 500 more pixels to the display to make 30x10x5
-- Build DDR controller
+- Add physical reset button that restarts things in case program hangs
 - Add delayed game start with quick countdown
 - Put game title up when switching to a game
 - Put score after losing a game
+- Add 500 more pixels to the display to make 30x10x5
+- Add virtual light display option for testing
+- Build MazeGame
+- Build DDR controller
 - Build PongGame
 - Build CentipedeGame
 - Build PixelCatchGame
@@ -35,7 +36,6 @@ Check out broomfieldlights.com for way more about my Christmas light show and re
 	- catch falling objects game (control size of catcher, mode to move along bottom or along front face, variable speed of objects)
 	- guitar hero or drum hero games where you play the right colors at the right time 
 	- Drive through a maze without touching the walls (mode to control width of track and/or complexity)
-	- Snake (select between 2D on the front grid and 3D, use car controller to move)
 	- Centipede?
 - Get additional controllers (DJ Hero scratch pad?)
 - Add other ways to interact (website form? text? tweet? camera?)
